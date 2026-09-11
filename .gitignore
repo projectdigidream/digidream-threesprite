@@ -47,3 +47,6 @@ src-tauri/gen/schemas/
 
 # macOS
 .DS_Store
+
+# smoke-driver output
+drive-out/
