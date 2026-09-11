@@ -1,0 +1,48 @@
+:root {
+  --bg: #181c26;
+  --bg-2: #1f2430;
+  --bg-3: #262c3a;
+  --fg: #e8ecf2;
+  --fg-dim: #9aa4b5;
+  --accent: #ffb454;
+  --accent-2: #5ec8ff;
+  --danger: #ff6b6b;
+  --border: #303748;
+  --hit: 32px;
+  --radius: 8px;
+  color-scheme: dark;
+}
+
+@media (pointer: coarse) {
+  :root { --hit: 44px; }
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-size: 14px;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+button {
+  font: inherit;
+  color: var(--fg);
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  min-height: var(--hit);
+  padding: 0 12px;
+  cursor: pointer;
+}
+button:disabled { opacity: 0.4; cursor: default; }
+button:not(:disabled):active { background: var(--border); }

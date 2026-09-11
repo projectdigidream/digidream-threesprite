@@ -1,0 +1,411 @@
+/**
+ * Project construction and structural operations. Every mutating function
+ * here takes the project (or an immer draft of it) and edits it in place; the
+ * store wraps them in `commit()` so they are undoable.
+ */
+import { clampKeys } from './animation'
+import { newId } from './ids'
+import { createImage } from './image'
+import { DEFAULT_PALETTE } from './palette'
+import { restWorldRotation } from './pose'
+import {
+  FORMAT_VERSION,
+  MAX_CANVAS,
+  MAX_FRAMES,
+  MIN_CANVAS,
+  SPRITE_NAME_RE,
+  type Animation,
+  type Bone,
+  type Id,
+  type Part,
+  type PartImage,
+  type PartVariant,
+  type Project,
+  type Transform,
+  type ViewIndex,
+} from './types'
+import { authoredViews, clampViewCount } from './views'
+
+export interface NewProjectOptions {
+  name?: string
+  spriteName?: string
+  canvasSize?: number
+  viewCount?: number
+  mirror?: boolean
+  /** Create the default bone/part/animation (true) or an empty skeleton. */
+  starter?: boolean
+}
+
+export function clampCanvasSize(n: number): number {
+  if (!Number.isFinite(n)) return 64
+  return Math.min(MAX_CANVAS, Math.max(MIN_CANVAS, Math.round(n)))
+}
+
+export function normalizeSpriteName(s: string): string {
+  const clean = s.toUpperCase().replace(/[^A-Z0-9]/g, '')
+  return (clean + 'SPRT').slice(0, 4)
+}
+
+export function createProject(opts: NewProjectOptions = {}): Project {
+  const size = clampCanvasSize(opts.canvasSize ?? 64)
+  const now = new Date().toISOString()
+  const p: Project = {
+    formatVersion: FORMAT_VERSION,
+    id: newId(),
+    name: opts.name?.trim() || 'Untitled sprite',
+    spriteName: normalizeSpriteName(opts.spriteName ?? 'SPRT'),
+    canvas: { size },
+    views: { count: clampViewCount(opts.viewCount ?? 8), mirror: opts.mirror ?? true },
+    palette: { colors: DEFAULT_PALETTE.map(c => [c[0], c[1], c[2], c[3]] as const) },
+    skeleton: { bones: {}, rootOrder: [] },
+    parts: {},
+    partOrder: [],
+    animations: {},
+    animationOrder: [],
+    export: { worldHeight: 1 },
+    meta: { createdAt: now, modifiedAt: now },
+  }
+  if (opts.starter !== false) {
+    // One bone standing on the ground line, pointing up; one upright part
+    // covering the whole canvas so drawing "just works" before any rigging.
+    const body = addBone(p, { name: 'body', rest: { x: size / 2, y: size, rotation: 90 }, length: Math.round(size * 0.6) })
+    addPart(p, { name: 'body', boneId: body.id, width: size, height: size, pivot: { x: size / 2, y: size } })
+    addAnimation(p, { name: 'idle', fps: 8, frameCount: 4, loop: true })
+  }
+  return p
+}
+
+// ── bones ────────────────────────────────────────────────────────────────────
+
+export interface AddBoneOptions {
+  name?: string
+  parentId?: Id | null
+  rest?: Partial<Transform>
+  length?: number
+}
+
+export function addBone(p: Project, opts: AddBoneOptions = {}): Bone {
+  const parentId = opts.parentId ?? null
+  if (parentId && !p.skeleton.bones[parentId]) throw new Error(`no such bone ${parentId}`)
+  const bone: Bone = {
+    id: newId(),
+    name: opts.name?.trim() || uniqueName('bone', Object.values(p.skeleton.bones).map(b => b.name)),
+    parentId,
+    children: [],
+    length: opts.length ?? Math.round(p.canvas.size / 4),
+    rest: { x: 0, y: 0, rotation: 0, scaleX: 1, scaleY: 1, ...opts.rest },
+  }
+  p.skeleton.bones[bone.id] = bone
+  if (parentId) p.skeleton.bones[parentId].children.push(bone.id)
+  else p.skeleton.rootOrder.push(bone.id)
+  return bone
+}
+
+/** Remove a bone. Children and parts move to its parent (or become roots / move to the first root). */
+export function removeBone(p: Project, id: Id): void {
+  const bone = p.skeleton.bones[id]
+  if (!bone) return
+  if (Object.keys(p.skeleton.bones).length <= 1) throw new Error('cannot remove the last bone')
+  const parentId = bone.parentId
+  // detach from parent / roots
+  if (parentId) {
+    const siblings = p.skeleton.bones[parentId].children
+    const at = siblings.indexOf(id)
+    siblings.splice(at, 1, ...bone.children)
+  } else {
+    const at = p.skeleton.rootOrder.indexOf(id)
+    p.skeleton.rootOrder.splice(at, 1, ...bone.children)
+  }
+  for (const c of bone.children) p.skeleton.bones[c].parentId = parentId
+  delete p.skeleton.bones[id]
+  // parts
+  const fallback = parentId ?? p.skeleton.rootOrder[0]
+  for (const part of Object.values(p.parts)) if (part.boneId === id) part.boneId = fallback
+  // tracks
+  for (const anim of Object.values(p.animations)) delete anim.boneTracks[id]
+}
+
+function isAncestor(p: Project, maybeAncestor: Id, of: Id): boolean {
+  let cur: Id | null = of
+  let guard = 0
+  while (cur && guard++ < 10000) {
+    if (cur === maybeAncestor) return true
+    cur = p.skeleton.bones[cur]?.parentId ?? null
+  }
+  return false
+}
+
+/** Reparent a bone. Throws on cycles. Rest pose is kept as-is (in the new parent's space). */
+export function reparentBone(p: Project, id: Id, newParentId: Id | null): void {
+  const bone = p.skeleton.bones[id]
+  if (!bone) return
+  if (newParentId === id) throw new Error('cannot parent a bone to itself')
+  if (newParentId && isAncestor(p, id, newParentId)) throw new Error('cannot parent a bone to its own descendant')
+  if (newParentId && !p.skeleton.bones[newParentId]) throw new Error(`no such bone ${newParentId}`)
+  if (bone.parentId === newParentId) return
+  if (bone.parentId) {
+    const sib = p.skeleton.bones[bone.parentId].children
+    sib.splice(sib.indexOf(id), 1)
+  } else {
+    p.skeleton.rootOrder.splice(p.skeleton.rootOrder.indexOf(id), 1)
+  }
+  bone.parentId = newParentId
+  if (newParentId) p.skeleton.bones[newParentId].children.push(id)
+  else p.skeleton.rootOrder.push(id)
+}
+
+/** Depth-first bone order (roots first, children after their parent). */
+export function boneOrder(p: Project): Id[] {
+  const out: Id[] = []
+  const visit = (id: Id) => {
+    out.push(id)
+    for (const c of p.skeleton.bones[id]?.children ?? []) visit(c)
+  }
+  for (const r of p.skeleton.rootOrder) visit(r)
+  return out
+}
+
+// ── parts ────────────────────────────────────────────────────────────────────
+
+export interface AddPartOptions {
+  name?: string
+  boneId: Id
+  width?: number
+  height?: number
+  pivot?: { x: number; y: number }
+  offset?: { x: number; y: number }
+  /** Rotate the image so it is upright in the rest pose (default true). */
+  upright?: boolean
+  /** Initial image for view 1 (default: a blank image). */
+  image?: PartImage
+}
+
+export function addPart(p: Project, opts: AddPartOptions): Part {
+  if (!p.skeleton.bones[opts.boneId]) throw new Error(`no such bone ${opts.boneId}`)
+  const w = opts.image?.width ?? opts.width ?? p.canvas.size
+  const h = opts.image?.height ?? opts.height ?? p.canvas.size
+  const variant: PartVariant = { id: newId(), name: 'default', images: {} }
+  variant.images[1] = opts.image ?? createImage(w, h)
+  const upright = opts.upright ?? true
+  const part: Part = {
+    id: newId(),
+    name: opts.name?.trim() || uniqueName('part', Object.values(p.parts).map(x => x.name)),
+    boneId: opts.boneId,
+    offset: opts.offset ?? { x: 0, y: 0 },
+    rotation: upright ? -restWorldRotation(p.skeleton, opts.boneId) : 0,
+    pivot: opts.pivot ?? { x: Math.floor(w / 2), y: h },
+    variants: { [variant.id]: variant },
+    variantOrder: [variant.id],
+    defaultVariant: variant.id,
+  }
+  p.parts[part.id] = part
+  p.partOrder.push(part.id)
+  return part
+}
+
+export function removePart(p: Project, id: Id): void {
+  if (!p.parts[id]) return
+  delete p.parts[id]
+  p.partOrder.splice(p.partOrder.indexOf(id), 1)
+  for (const anim of Object.values(p.animations)) delete anim.partTracks[id]
+}
+
+export function movePartOrder(p: Project, id: Id, toIndex: number): void {
+  const from = p.partOrder.indexOf(id)
+  if (from < 0) return
+  const to = Math.max(0, Math.min(p.partOrder.length - 1, toIndex))
+  p.partOrder.splice(from, 1)
+  p.partOrder.splice(to, 0, id)
+}
+
+export function addVariant(p: Project, partId: Id, name?: string): PartVariant {
+  const part = p.parts[partId]
+  if (!part) throw new Error(`no such part ${partId}`)
+  const v: PartVariant = { id: newId(), name: name?.trim() || uniqueName('variant', part.variantOrder.map(id => part.variants[id].name)), images: {} }
+  part.variants[v.id] = v
+  part.variantOrder.push(v.id)
+  return v
+}
+
+export function removeVariant(p: Project, partId: Id, variantId: Id): void {
+  const part = p.parts[partId]
+  if (!part || !part.variants[variantId]) return
+  if (part.variantOrder.length <= 1) throw new Error('cannot remove the last variant')
+  delete part.variants[variantId]
+  part.variantOrder.splice(part.variantOrder.indexOf(variantId), 1)
+  if (part.defaultVariant === variantId) part.defaultVariant = part.variantOrder[0]
+  for (const anim of Object.values(p.animations)) {
+    const t = anim.partTracks[partId]
+    if (!t) continue
+    for (let i = t.variant.length - 1; i >= 0; i--) if (t.variant[i].value === variantId) t.variant.splice(i, 1)
+  }
+}
+
+export function setPartImage(p: Project, partId: Id, variantId: Id, view: ViewIndex, image: PartImage | undefined): void {
+  const v = p.parts[partId]?.variants[variantId]
+  if (!v) throw new Error(`no such variant ${partId}/${variantId}`)
+  if (image) v.images[view] = image
+  else delete v.images[view]
+}
+
+export function getPartImage(p: Project, partId: Id, variantId: Id, view: ViewIndex): PartImage | undefined {
+  return p.parts[partId]?.variants[variantId]?.images[view]
+}
+
+// ── animations ───────────────────────────────────────────────────────────────
+
+export interface AddAnimationOptions { name?: string; fps?: number; frameCount?: number; loop?: boolean }
+
+export function addAnimation(p: Project, opts: AddAnimationOptions = {}): Animation {
+  const anim: Animation = {
+    id: newId(),
+    name: opts.name?.trim() || uniqueName('anim', p.animationOrder.map(id => p.animations[id].name)),
+    fps: Math.max(0, opts.fps ?? 8),
+    loop: opts.loop ?? true,
+    frameCount: Math.min(MAX_FRAMES, Math.max(1, Math.round(opts.frameCount ?? 4))),
+    boneTracks: {},
+    partTracks: {},
+  }
+  p.animations[anim.id] = anim
+  p.animationOrder.push(anim.id)
+  return anim
+}
+
+export function removeAnimation(p: Project, id: Id): void {
+  if (!p.animations[id]) return
+  delete p.animations[id]
+  p.animationOrder.splice(p.animationOrder.indexOf(id), 1)
+}
+
+export function setFrameCount(p: Project, animId: Id, frameCount: number): void {
+  const anim = p.animations[animId]
+  if (!anim) return
+  anim.frameCount = Math.min(MAX_FRAMES, Math.max(1, Math.round(frameCount)))
+  for (const t of Object.values(anim.boneTracks)) {
+    clampKeys(t.rotation, anim.frameCount)
+    clampKeys(t.translate, anim.frameCount)
+    clampKeys(t.scale, anim.frameCount)
+  }
+  for (const t of Object.values(anim.partTracks)) {
+    clampKeys(t.visible, anim.frameCount)
+    clampKeys(t.variant, anim.frameCount)
+  }
+}
+
+export function ensureBoneTrack(anim: Animation, boneId: Id) {
+  return (anim.boneTracks[boneId] ??= { rotation: [], translate: [], scale: [] })
+}
+
+export function ensurePartTrack(anim: Animation, partId: Id) {
+  return (anim.partTracks[partId] ??= { visible: [], variant: [] })
+}
+
+// ── views ────────────────────────────────────────────────────────────────────
+
+/** Change the view count / mirror mode. Images for views that no longer exist are dropped; returns warnings. */
+export function setViews(p: Project, count: number, mirror: boolean): string[] {
+  const warnings: string[] = []
+  p.views.count = clampViewCount(count)
+  p.views.mirror = mirror
+  const keep = new Set(authoredViews(p.views.count, p.views.mirror))
+  for (const part of Object.values(p.parts)) {
+    for (const v of Object.values(part.variants)) {
+      for (const k of Object.keys(v.images)) {
+        const view = Number(k)
+        if (!keep.has(view)) {
+          delete v.images[view]
+          warnings.push(`Dropped image of part "${part.name}" (${v.name}) for view ${view}`)
+        }
+      }
+    }
+  }
+  return warnings
+}
+
+// ── validation ───────────────────────────────────────────────────────────────
+
+/** Returns a list of problems; empty when the project is consistent. */
+export function validate(p: Project): string[] {
+  const errs: string[] = []
+  if (p.formatVersion !== FORMAT_VERSION) errs.push(`unsupported formatVersion ${p.formatVersion}`)
+  if (!SPRITE_NAME_RE.test(p.spriteName)) errs.push(`spriteName "${p.spriteName}" must be 4 chars [A-Z0-9]`)
+  if (p.canvas.size < MIN_CANVAS || p.canvas.size > MAX_CANVAS) errs.push(`canvas size ${p.canvas.size} out of range`)
+  if (p.views.count !== clampViewCount(p.views.count)) errs.push(`views.count ${p.views.count} out of range`)
+
+  const bones = p.skeleton.bones
+  const boneIds = new Set(Object.keys(bones))
+  const seen = new Set<Id>()
+  const visit = (id: Id, depth: number) => {
+    if (depth > 10000 || seen.has(id)) { errs.push(`bone graph cycle at ${id}`); return }
+    seen.add(id)
+    const b = bones[id]
+    if (!b) { errs.push(`missing bone ${id}`); return }
+    for (const c of b.children) {
+      if (bones[c]?.parentId !== id) errs.push(`bone ${c} parent mismatch`)
+      visit(c, depth + 1)
+    }
+  }
+  for (const r of p.skeleton.rootOrder) {
+    if (bones[r]?.parentId !== null) errs.push(`root ${r} has a parent`)
+    visit(r, 0)
+  }
+  for (const id of boneIds) if (!seen.has(id)) errs.push(`bone ${id} unreachable from roots`)
+
+  const partIds = Object.keys(p.parts)
+  if (partIds.length !== p.partOrder.length || partIds.some(id => !p.partOrder.includes(id))) errs.push('partOrder is not a permutation of parts')
+  const authored = new Set(authoredViews(p.views.count, p.views.mirror))
+  for (const part of Object.values(p.parts)) {
+    if (!bones[part.boneId]) errs.push(`part ${part.name} is on missing bone ${part.boneId}`)
+    if (!part.variants[part.defaultVariant]) errs.push(`part ${part.name} default variant missing`)
+    if (part.variantOrder.length !== Object.keys(part.variants).length) errs.push(`part ${part.name} variantOrder mismatch`)
+    for (const v of Object.values(part.variants)) {
+      for (const [k, img] of Object.entries(v.images)) {
+        const view = Number(k)
+        if (!authored.has(view)) errs.push(`part ${part.name} has an image for non-authored view ${view}`)
+        if (img.pixels.length !== img.width * img.height * 4) errs.push(`part ${part.name} view ${view} pixel buffer size mismatch`)
+        if (img.width > p.canvas.size || img.height > p.canvas.size) errs.push(`part ${part.name} view ${view} image larger than the canvas`)
+      }
+    }
+  }
+
+  const animIds = Object.keys(p.animations)
+  if (animIds.length !== p.animationOrder.length || animIds.some(id => !p.animationOrder.includes(id))) errs.push('animationOrder is not a permutation of animations')
+  for (const anim of Object.values(p.animations)) {
+    if (anim.frameCount < 1 || anim.frameCount > MAX_FRAMES) errs.push(`animation ${anim.name} frameCount out of range`)
+    if (!(anim.fps >= 0)) errs.push(`animation ${anim.name} fps invalid`)
+    const checkKeys = (label: string, keys: { frame: number }[]) => {
+      for (let i = 0; i < keys.length; i++) {
+        const f = keys[i].frame
+        if (f < 0 || f >= anim.frameCount) errs.push(`animation ${anim.name} ${label} key at frame ${f} out of range`)
+        if (i > 0 && keys[i - 1].frame >= f) errs.push(`animation ${anim.name} ${label} keys not strictly sorted`)
+      }
+    }
+    for (const [bid, t] of Object.entries(anim.boneTracks)) {
+      if (!bones[bid]) errs.push(`animation ${anim.name} has a track for missing bone ${bid}`)
+      checkKeys(`bone ${bid} rotation`, t.rotation)
+      checkKeys(`bone ${bid} translate`, t.translate)
+      checkKeys(`bone ${bid} scale`, t.scale)
+    }
+    for (const [pid, t] of Object.entries(anim.partTracks)) {
+      if (!p.parts[pid]) errs.push(`animation ${anim.name} has a track for missing part ${pid}`)
+      checkKeys(`part ${pid} visible`, t.visible)
+      checkKeys(`part ${pid} variant`, t.variant)
+    }
+  }
+  return errs
+}
+
+// ── helpers ──────────────────────────────────────────────────────────────────
+
+export function uniqueName(base: string, existing: string[]): string {
+  const taken = new Set(existing)
+  if (!taken.has(base)) return base
+  for (let i = 2; ; i++) {
+    const n = `${base} ${i}`
+    if (!taken.has(n)) return n
+  }
+}
+
+export function touch(p: Project): void {
+  p.meta.modifiedAt = new Date().toISOString()
+}

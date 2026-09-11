@@ -1,0 +1,49 @@
+# Dependencies
+node_modules/
+
+# Vite build output
+dist/
+dist-web/
+dist-ssr/
+
+# Test coverage
+coverage/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment
+*.local
+.env
+.env.*
+!.env.example
+
+# Android keystore — never commit signing keys or passwords
+*.jks
+*.keystore
+src-tauri/keystore.properties
+src-tauri/keystore.properties.*
+
+# Tauri Rust build artifacts
+src-tauri/target/
+
+# Tauri generated files
+src-tauri/gen/schemas/
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# macOS
+.DS_Store
