@@ -4,11 +4,11 @@ import TabBar from './TabBar'
 
 interface Props {
   compact?: boolean
-  onNew: () => void
+  onMenu: () => void
   onSettings: () => void
 }
 
-export default function Toolbar({ compact = false, onNew, onSettings }: Props) {
+export default function Toolbar({ compact = false, onMenu, onSettings }: Props) {
   const name = useEditor(s => s.doc.name)
   const dirty = useEditor(s => s.dirty)
   const undoable = useEditor(canUndo)
@@ -21,7 +21,7 @@ export default function Toolbar({ compact = false, onNew, onSettings }: Props) {
 
   return (
     <header className="toolbar">
-      <button className="icon-btn" title="New project" onClick={onNew}><Icon name="new" /></button>
+      <button className="icon-btn" title="Project menu (new, open, save)" aria-label="Project menu" onClick={onMenu}><Icon name="menu" /></button>
       <button className="toolbar__title" title="Project settings" onClick={onSettings}>
         <span className="toolbar__name">{name}{dirty ? ' •' : ''}</span>
         {!compact && <span className="toolbar__meta">{size}px · {N} views{mirror ? ' · mirrored' : ''}</span>}

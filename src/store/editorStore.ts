@@ -56,6 +56,11 @@ export type HistoryEntry =
 
 export const HISTORY_CAP = 200
 
+export interface DocSource {
+  /** External file path the document is saved to (desktop). Undefined = the app library. */
+  path?: string
+}
+
 export interface EditorState {
   doc: Project
   /** Bumps on every document change; caches key on it. */
@@ -63,8 +68,10 @@ export interface EditorState {
   dirty: boolean
   history: { undo: HistoryEntry[]; redo: HistoryEntry[] }
   ui: UiState
+  source: DocSource
 
   loadProject: (p: Project) => void
+  setSource: (s: DocSource) => void
   /** Undoable structural edit. Returns false when the recipe changed nothing. */
   commit: (label: string, recipe: (d: Project) => void) => boolean
   /** Undoable image replacement (buffer swap). `undefined` = image absent. */
@@ -141,9 +148,14 @@ export const editorStore = createStore<EditorState>()((set, get) => {
     dirty: false,
     history: { undo: [], redo: [] },
     ui: defaultUi(initial),
+    source: {},
 
     loadProject(p) {
-      set(s => ({ doc: p, revision: s.revision + 1, dirty: false, history: { undo: [], redo: [] }, ui: defaultUi(p) }))
+      set(s => ({ doc: p, revision: s.revision + 1, dirty: false, history: { undo: [], redo: [] }, ui: defaultUi(p), source: {} }))
+    },
+
+    setSource(source) {
+      set({ source })
     },
 
     commit(label, recipe) {

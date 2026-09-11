@@ -3795,6 +3795,7 @@ dependencies = [
  "tauri-plugin-fs",
  "tauri-plugin-opener",
  "thiserror 2.0.20",
+ "url",
  "zip",
 ]
 

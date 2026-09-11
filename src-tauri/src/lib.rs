@@ -1,5 +1,11 @@
+mod atlas;
+mod bundle;
 mod commands;
+mod doom;
 mod error;
+mod gif_codec;
+mod png_codec;
+mod sink;
 
 pub use error::Error;
 
@@ -10,7 +16,13 @@ pub fn run() {
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
-        .invoke_handler(tauri::generate_handler![commands::ping, commands::echo_bytes]);
+        .invoke_handler(tauri::generate_handler![
+            commands::ping,
+            commands::echo_bytes,
+            commands::encode_png,
+            commands::export_bundle,
+            commands::probe_dir
+        ]);
 
     // Reveal-in-folder is a desktop concept; the plugin has no mobile build.
     #[cfg(desktop)]

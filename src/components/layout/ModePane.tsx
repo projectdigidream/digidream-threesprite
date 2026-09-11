@@ -1,4 +1,5 @@
 import type { Mode } from '../../store/editorStore'
+import ExportPanel from '../export/ExportPanel'
 import BoneTree from '../panels/BoneTree'
 import Inspector from '../panels/Inspector'
 import Timeline from '../timeline/Timeline'
@@ -20,6 +21,6 @@ export default function ModePane({ mode, side, bottom }: Props) {
     if (mode === 'animate') return <Timeline />
     return null
   }
-  if (mode === 'export') return <div className="pane-placeholder">Export arrives in milestone 5.</div>
+  if (mode === 'export') return <ExportPanel />
   return null
 }
