@@ -12,6 +12,7 @@ import type { ExportReport, ExportSelection, SinkSpec } from '../export/types'
 import { isTauri } from '../platform'
 import { downloadBytes } from './browserDownload'
 import { buildManifest, collectFrames, encodeBundle } from './exportBundle'
+import { invokeWithBytes } from './ipc'
 
 export type Destination = 'dir' | 'zip'
 
@@ -28,8 +29,7 @@ export async function runExport(project: Project, sel: ExportSelection, dest: De
   const collected = collectFrames(project, sel.animIds, onProgress)
   const manifest = buildManifest(project, sel, sink, collected)
   const bundle = encodeBundle(manifest, collected.buffers, project.canvas.size)
-  const { invoke } = await import('@tauri-apps/api/core')
-  const report = await invoke<ExportReport>('export_bundle', bundle)
+  const report = await invokeWithBytes<ExportReport>('export_bundle', bundle)
   return { ...report, warnings: [...plan.warnings, ...report.warnings] }
 }
 

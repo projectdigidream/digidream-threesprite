@@ -23,17 +23,16 @@ export default function SmokeTest() {
 
   async function roundTrip() {
     try {
-      const { invoke } = await import('@tauri-apps/api/core')
+      const { invokeBytes } = await import('../../core/io/ipc')
       const n = 4 * 1024 * 1024
       const buf = new Uint8Array(n)
       for (let i = 0; i < n; i++) buf[i] = (i * 31 + (i >> 8)) & 0xff
       const t0 = performance.now()
-      const raw = await invoke<ArrayBuffer | Uint8Array | number[]>('echo_bytes', buf)
+      const out = await invokeBytes('echo_bytes', buf)
       const ms = performance.now() - t0
-      const out = raw instanceof ArrayBuffer ? new Uint8Array(raw) : raw instanceof Uint8Array ? raw : Uint8Array.from(raw)
       let ok = out.length === n
       for (let i = 0; ok && i < n; i += 4093) ok = out[i] === buf[i]
-      add(`echo_bytes 4 MB → ${out.length} bytes, ${ok ? 'MATCH' : 'MISMATCH'}, ${ms.toFixed(0)} ms, type ${raw?.constructor?.name}`)
+      add(`echo_bytes 4 MB → ${out.length} bytes, ${ok ? 'MATCH' : 'MISMATCH'}, ${ms.toFixed(0)} ms`)
     } catch (e) { fail(e) }
   }
 

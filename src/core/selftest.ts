@@ -1,6 +1,6 @@
 /**
- * Automated platform self-test for the Tauri builds: raw IPC, app-data file
- * I/O and a real export through the Rust pipeline. Triggered by
+ * Automated platform self-test for the Tauri builds: binary IPC, app-data
+ * file I/O and real exports through the Rust pipeline. Triggered by
  * `THREESPRITE_SELFTEST=1` (desktop), a `?selftest` query, or an
  * `AppData/selftest` marker file (Android via adb). Results go to
  * `AppData/selftest.json` and to the `selftest_done` command.
@@ -8,6 +8,7 @@
 import { createProject } from '../domain/project'
 import { DEFAULT_OPTIONS } from './export/types'
 import { buildManifest, collectFrames, encodeBundle } from './io/exportBundle'
+import { invokeBytes, invokeWithBytes } from './io/ipc'
 import { isTauri } from './platform'
 
 export interface SelfTestReport { ok: boolean; steps: { name: string; ok: boolean; detail: string }[]; platform: string }
@@ -40,11 +41,10 @@ export async function runSelfTest(): Promise<SelfTestReport> {
     const buf = new Uint8Array(n)
     for (let i = 0; i < n; i++) buf[i] = (i * 31 + (i >> 8)) & 0xff
     const t0 = performance.now()
-    const raw = await invoke<ArrayBuffer | Uint8Array | number[]>('echo_bytes', buf)
-    const out = raw instanceof ArrayBuffer ? new Uint8Array(raw) : raw instanceof Uint8Array ? raw : Uint8Array.from(raw)
+    const out = await invokeBytes('echo_bytes', buf)
     if (out.length !== n) throw new Error(`length ${out.length}`)
     for (let i = 0; i < n; i += 997) if (out[i] !== buf[i]) throw new Error(`mismatch at ${i}`)
-    return `${(performance.now() - t0).toFixed(0)} ms, ${raw?.constructor?.name}`
+    return `${(performance.now() - t0).toFixed(0)} ms`
   })
   await step('appdata write/read', async () => {
     await fs.mkdir('selftest-dir', { baseDir: fs.BaseDirectory.AppData, recursive: true })
@@ -59,7 +59,7 @@ export async function runSelfTest(): Promise<SelfTestReport> {
     const dir = await join(await appDataDir(), 'selftest-export')
     const manifest = buildManifest(p, { format: 'doom', animIds: p.animationOrder, options: DEFAULT_OPTIONS }, { kind: 'dir', path: dir }, collected)
     const bundle = encodeBundle(manifest, collected.buffers, 16)
-    const r = await invoke<{ files: string[]; warnings: string[]; bytes: number; location: string }>('export_bundle', bundle)
+    const r = await invokeWithBytes<{ files: string[]; warnings: string[]; bytes: number; location: string }>('export_bundle', bundle)
     if (r.files.length !== 32) throw new Error(`expected 32 files, got ${r.files.length}`)
     return `${r.files.length} files, ${r.bytes} bytes → ${r.location}`
   })
@@ -69,7 +69,7 @@ export async function runSelfTest(): Promise<SelfTestReport> {
     const path = await join(await appDataDir(), 'selftest-export', 'atlas.zip')
     const manifest = buildManifest(p, { format: 'atlas', animIds: p.animationOrder, options: DEFAULT_OPTIONS }, { kind: 'zip', path }, collected)
     const bundle = encodeBundle(manifest, collected.buffers, 16)
-    const r = await invoke<{ files: string[]; bytes: number; location: string }>('export_bundle', bundle)
+    const r = await invokeWithBytes<{ files: string[]; bytes: number; location: string }>('export_bundle', bundle)
     const st = await fs.stat(path)
     return `${r.files.join(', ')} → ${st.size} bytes zip`
   })

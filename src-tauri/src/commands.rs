@@ -1,3 +1,7 @@
+use std::borrow::Cow;
+
+use base64::engine::general_purpose::STANDARD as B64;
+use base64::Engine;
 use serde::Serialize;
 use tauri::ipc::{InvokeBody, Request, Response};
 use tauri::AppHandle;
@@ -27,27 +31,36 @@ pub fn selftest_done(app: AppHandle, report: String) {
     }
 }
 
-/// Raw-body round trip used by the smoke test: proves that a `Uint8Array`
-/// passed to `invoke` arrives as `InvokeBody::Raw` and that a `Response` of
-/// bytes comes back as an `ArrayBuffer`, on every platform.
+/// Binary round trip used by the self-test. Desktop sends a raw body and gets
+/// raw bytes back; mobile (where the IPC bridge is JSON-only) sends
+/// `{ "b64": … }` and gets `{ "b64": … }` back.
 #[tauri::command]
 pub fn echo_bytes(request: Request<'_>) -> Result<Response> {
-    match request.body() {
-        InvokeBody::Raw(bytes) => Ok(Response::new(bytes.clone())),
-        InvokeBody::Json(_) => Err(Error::BadRequest("expected a raw binary body".into())),
+    let was_raw = matches!(request.body(), InvokeBody::Raw(_));
+    let bytes = body_bytes(&request)?;
+    if was_raw {
+        Ok(Response::new(bytes.into_owned()))
+    } else {
+        Ok(Response::new(serde_json::json!({ "b64": B64.encode(bytes.as_ref()) }).to_string()))
     }
 }
 
-/// `u32le w | u32le h | RGBA` → PNG bytes.
+/// `u32le w | u32le h | RGBA` → PNG bytes (raw or `{ "b64": … }` like `echo_bytes`).
 #[tauri::command]
 pub fn encode_png(request: Request<'_>) -> Result<Response> {
-    let body = raw(&request)?;
+    let was_raw = matches!(request.body(), InvokeBody::Raw(_));
+    let body = body_bytes(&request)?;
     if body.len() < 8 {
         return Err(Error::BadRequest("encode_png: body too short".into()));
     }
     let w = u32::from_le_bytes([body[0], body[1], body[2], body[3]]);
     let h = u32::from_le_bytes([body[4], body[5], body[6], body[7]]);
-    Ok(Response::new(png_codec::encode_rgba(w, h, &body[8..])?))
+    let png = png_codec::encode_rgba(w, h, &body[8..])?;
+    if was_raw {
+        Ok(Response::new(png))
+    } else {
+        Ok(Response::new(serde_json::json!({ "b64": B64.encode(&png) }).to_string()))
+    }
 }
 
 #[derive(Serialize)]
@@ -62,8 +75,8 @@ pub struct ExportReport {
 /// format, write them to the sink.
 #[tauri::command]
 pub fn export_bundle(app: AppHandle, request: Request<'_>) -> Result<ExportReport> {
-    let body = raw(&request)?;
-    let bundle = bundle::parse(body)?;
+    let body = body_bytes(&request)?;
+    let bundle = bundle::parse(&body)?;
     let mut warnings = Vec::new();
     let files = produce(&bundle, &mut warnings)?;
     if files.is_empty() {
@@ -93,10 +106,25 @@ pub fn probe_dir(path: String) -> Result<DirInfo> {
     Ok(DirInfo { exists, writable, entries })
 }
 
-fn raw<'a>(request: &'a Request<'_>) -> Result<&'a [u8]> {
+/// The binary payload of a command, whichever way the platform's IPC bridge
+/// delivered it: a raw body (desktop), `{ "b64": "…" }` (mobile), or a JSON
+/// array of byte values.
+fn body_bytes<'a>(request: &'a Request<'_>) -> Result<Cow<'a, [u8]>> {
     match request.body() {
-        InvokeBody::Raw(bytes) => Ok(bytes.as_slice()),
-        InvokeBody::Json(_) => Err(Error::BadRequest("expected a raw binary body".into())),
+        InvokeBody::Raw(bytes) => Ok(Cow::Borrowed(bytes.as_slice())),
+        InvokeBody::Json(v) => {
+            if let Some(s) = v.get("b64").and_then(|x| x.as_str()) {
+                return B64.decode(s).map(Cow::Owned).map_err(|e| Error::BadRequest(format!("base64: {e}")));
+            }
+            if let Some(arr) = v.as_array() {
+                let mut out = Vec::with_capacity(arr.len());
+                for x in arr {
+                    out.push(x.as_u64().ok_or_else(|| Error::BadRequest("byte array element is not a number".into()))? as u8);
+                }
+                return Ok(Cow::Owned(out));
+            }
+            Err(Error::BadRequest("expected a raw binary body, { b64 } or a byte array".into()))
+        }
     }
 }
 

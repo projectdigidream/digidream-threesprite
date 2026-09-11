@@ -18,7 +18,8 @@ pub fn encode_rgba(w: u32, h: u32, rgba: &[u8]) -> Result<Vec<u8>> {
     Ok(out)
 }
 
-/// Decode any 8-bit-capable PNG to straight RGBA8.
+/// Decode any 8-bit-capable PNG to straight RGBA8 (used by the tests; kept for PNG import through Rust later).
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn decode_rgba(bytes: &[u8]) -> Result<(u32, u32, Vec<u8>)> {
     let mut decoder = png::Decoder::new(Cursor::new(bytes));
     decoder.set_transformations(png::Transformations::normalize_to_color8());

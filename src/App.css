@@ -402,3 +402,7 @@ input[type='text'], input:not([type]), input[inputmode] {
 .help__table kbd { font: 12px system-ui, sans-serif; background: var(--bg-3); border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; }
 .help__note { font-size: 12px; color: var(--fg-dim); margin: 0; }
 .toolbar__help { font-weight: 700; font-size: 15px; }
+
+/* edge-to-edge webviews (Android): keep the header below the status bar */
+.toolbar { padding-top: env(safe-area-inset-top, 0px); height: calc(var(--toolbar-h) + env(safe-area-inset-top, 0px)); }
+.menu { top: calc(var(--toolbar-h) + env(safe-area-inset-top, 0px)); }
