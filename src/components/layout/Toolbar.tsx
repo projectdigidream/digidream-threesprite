@@ -6,9 +6,10 @@ interface Props {
   compact?: boolean
   onMenu: () => void
   onSettings: () => void
+  onHelp: () => void
 }
 
-export default function Toolbar({ compact = false, onMenu, onSettings }: Props) {
+export default function Toolbar({ compact = false, onMenu, onSettings, onHelp }: Props) {
   const name = useEditor(s => s.doc.name)
   const dirty = useEditor(s => s.dirty)
   const undoable = useEditor(canUndo)
@@ -31,7 +32,8 @@ export default function Toolbar({ compact = false, onMenu, onSettings }: Props) 
       <span className="spacer" />
       {!compact && <TabBar />}
       <span className="spacer" />
-      <button className="icon-btn" title="Project settings" onClick={onSettings}><Icon name="settings" /></button>
+      {!compact && <button className="icon-btn" title="Shortcuts and gestures (?)" aria-label="Help" onClick={onHelp}><span className="toolbar__help">?</span></button>}
+      <button className="icon-btn" title="Project settings" aria-label="Project settings" onClick={onSettings}><Icon name="settings" /></button>
     </header>
   )
 }

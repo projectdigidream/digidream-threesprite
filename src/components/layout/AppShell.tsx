@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { getLibrary } from '../../core/io/library'
 import { openRecent } from '../../core/io/projectActions'
+import { useAndroidBack } from '../../hooks/useAndroidBack'
 import { useAutosave } from '../../hooks/useAutosave'
 import { useIsMobile } from '../../hooks/useIsMobile'
-import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts'
+import { isTypingTarget, useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts'
 import { editorStore, useEditor } from '../../store/editorStore'
 import { startPlaybackLoop } from '../../store/playback'
+import HelpDialog from '../project/HelpDialog'
 import NewProjectDialog from '../project/NewProjectDialog'
 import ProjectMenu, { useFileShortcuts } from '../project/ProjectMenu'
 import ProjectSettingsDialog from '../project/ProjectSettingsDialog'
@@ -14,10 +16,13 @@ import MobileLayout from './MobileLayout'
 import Toolbar from './Toolbar'
 
 type Toast = { msg: string; kind: 'info' | 'error'; id: number }
+type Dialog = 'new' | 'settings' | 'menu' | 'help' | null
 
 export default function AppShell() {
   const mobile = useIsMobile()
-  const [dialog, setDialog] = useState<'new' | 'settings' | 'menu' | null>(null)
+  const [dialog, setDialog] = useState<Dialog>(null)
+  const dialogRef = useRef<Dialog>(null)
+  dialogRef.current = dialog
   const [toast, setToast] = useState<Toast | null>(null)
   const name = useEditor(s => s.doc.name)
   const dirty = useEditor(s => s.dirty)
@@ -31,9 +36,19 @@ export default function AppShell() {
   }, [])
   const openNew = useCallback(() => setDialog('new'), [])
   useFileShortcuts(openNew, notify)
+  useAndroidBack(useCallback(() => { if (dialogRef.current) { setDialog(null); return true } return false }, []))
 
   useEffect(() => { document.title = `${dirty ? '• ' : ''}${name} — ThreeSprite` }, [name, dirty])
   useEffect(() => startPlaybackLoop(), [])
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (isTypingTarget(e.target) || e.metaKey || e.ctrlKey) return
+      if (e.key === '?' || e.key === 'F1') { e.preventDefault(); setDialog(d => (d === 'help' ? null : 'help')) }
+      if (e.key === 'Escape') setDialog(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   // On launch, continue with the most recent project when the fresh document is untouched.
   useEffect(() => {
@@ -55,11 +70,12 @@ export default function AppShell() {
 
   return (
     <div className={`app ${mobile ? 'app--mobile' : 'app--desktop'}`}>
-      <Toolbar compact={mobile} onMenu={() => setDialog('menu')} onSettings={() => setDialog('settings')} />
+      <Toolbar compact={mobile} onMenu={() => setDialog('menu')} onSettings={() => setDialog('settings')} onHelp={() => setDialog('help')} />
       {mobile ? <MobileLayout /> : <DesktopLayout />}
       {dialog === 'menu' && <ProjectMenu onNew={openNew} onClose={() => setDialog(null)} notify={notify} />}
       {dialog === 'new' && <NewProjectDialog onClose={() => setDialog(null)} />}
       {dialog === 'settings' && <ProjectSettingsDialog onClose={() => setDialog(null)} />}
+      {dialog === 'help' && <HelpDialog onClose={() => setDialog(null)} />}
       {toast && <div className={`toast toast--${toast.kind}`} role="status">{toast.msg}</div>}
     </div>
   )
