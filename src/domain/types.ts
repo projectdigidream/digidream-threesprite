@@ -120,6 +120,22 @@ export interface Part {
   defaultVariant: Id
   /** When present the part is rendered live from these 3D solids, in the bone's frame; its images are ignored. */
   solids?: SolidsGroup
+  /**
+   * Skinning: extra bones that deform this part's image. The image is cut
+   * into a grid; each vertex follows a blend of the bones' movements weighted
+   * by its distance to each bone at rest, so the image bends, stretches and
+   * twists between bones in the plane of each view.
+   */
+  skin?: PartSkin
+}
+
+export interface PartSkin {
+  /** Extra influencing bones (the part's own bone always influences it). */
+  bones: Id[]
+  /** Influence radius in pixels: a vertex farther than this from a bone ignores it. */
+  falloff: number
+  /** Grid cell size in image pixels (smaller = smoother bends, slower). */
+  cell: number
 }
 
 export interface BoneTrack {

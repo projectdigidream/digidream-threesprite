@@ -8,7 +8,8 @@
  * solids parts render live from the bone's 3D frame.
  */
 import { flipXPixelsInPlace } from '../../domain/image'
-import { evalPose, partMatrix, projectBone, samplePart, viewProj } from '../../domain/pose'
+import { evalPose, partMatrix, projectBone, samplePart, viewProj, type BoneProjection } from '../../domain/pose'
+import { buildSkinGrid, deformGrid, gridIsAtRest, rasterizeSkinnedGrid } from '../../domain/skin'
 import { renderSolids } from '../../domain/solids'
 import { IDENTITY, invert, type Mat2D } from '../../domain/transform'
 import type { Id, PartImage, Project, ViewIndex } from '../../domain/types'
@@ -143,6 +144,26 @@ export function composeFrame(project: Project, animId: Id | null, frame: number,
     if (!img) continue
     const rp = projectBone(restWorld, bone.length, vp)
     const cp = anim ? projectBone(world, bone.length, vp, rp.angle) : rp
+
+    // skinning: several bones bend the image; falls back to the exact rigid blit at rest
+    const extra = part.skin ? part.skin.bones.filter(id => id !== part.boneId && project.skeleton.bones[id] && pose.has(id) && rest.has(id)) : []
+    if (anim && extra.length) {
+      const restProj: BoneProjection[] = [rp]
+      const curProj: BoneProjection[] = [cp]
+      for (const id of extra) {
+        const b = project.skeleton.bones[id]
+        const r = projectBone(rest.get(id)!, b.length, vp)
+        restProj.push(r)
+        curProj.push(projectBone(pose.get(id)!, b.length, vp, r.angle))
+      }
+      const restM = partMatrix(rp, rp, part)
+      const grid = buildSkinGrid(img, restM, restProj, part.skin!.falloff, part.skin!.cell)
+      const posArr = deformGrid(grid, restProj, curProj, part.foreshorten)
+      if (!gridIsAtRest(grid, posArr)) {
+        rasterizeSkinnedGrid(out, size, size, img, grid, posArr, alpha)
+        continue
+      }
+    }
     blitNearest(out, size, size, img, snapMatrix(partMatrix(rp, cp, part)), alpha)
   }
 

@@ -1,6 +1,6 @@
 import { getKey, removeKey, setKey } from '../../domain/animation'
 import { restProjectedAngle, sampleBone, samplePart } from '../../domain/pose'
-import { ensureBoneTrack, ensurePartTrack, reparentBone } from '../../domain/project'
+import { boneOrder, ensureBoneTrack, ensurePartTrack, reparentBone, setPartSkin } from '../../domain/project'
 import type { Animation, Bone, Id, Interp, Part, Vec3 } from '../../domain/types'
 import { useEditor } from '../../store/editorStore'
 import { Icon } from '../ui/Icon'
@@ -108,6 +108,26 @@ function RigInspector() {
                 <button className="text-btn" onClick={() => setPart('Center pivot', p => { const img = Object.values(p.variants[p.defaultVariant]?.images ?? {})[0]; if (img) p.pivot = { x: Math.floor(img.width / 2), y: img.height } })}>Pivot at feet</button>
               </div>
               <small>Drag the pink pivot cross on the canvas to move where the image hangs on its bone. Images are drawn per view; the rig is shared.</small>
+              <h4>Skin (bend between bones)</h4>
+              <div className="skin__bones">
+                {boneOrder(doc).filter(id => id !== part.boneId).map(id => (
+                  <label key={id} className="field--row">
+                    <input type="checkbox" checked={!!part.skin?.bones.includes(id)} onChange={e => commit('Skin bones', d => {
+                      const cur = d.parts[part.id]?.skin?.bones ?? []
+                      setPartSkin(d, part.id, { bones: e.target.checked ? [...cur, id] : cur.filter(b => b !== id) })
+                    })} />
+                    <span>{doc.skeleton.bones[id].name}</span>
+                  </label>
+                ))}
+                {Object.keys(doc.skeleton.bones).length < 2 && <small>Add another bone to bend this part between them.</small>}
+              </div>
+              {part.skin && (
+                <div className="numgrid">
+                  <NumField label="Influence radius" value={part.skin.falloff} min={1} suffix="px" title="A vertex farther than this from a bone ignores it; larger = softer bends" onCommit={v => commit('Skin falloff', d => setPartSkin(d, part.id, { falloff: v }))} />
+                  <NumField label="Grid cell" value={part.skin.cell} min={1} max={64} suffix="px" title="Deformation grid resolution (smaller = smoother)" onCommit={v => commit('Skin cell', d => setPartSkin(d, part.id, { cell: v }))} />
+                </div>
+              )}
+              <small>The image is cut into a grid; each point follows the bones near it, so the art bends, stretches and twists between bones in the plane of each view. At rest it draws pixel-exactly.</small>
             </>
           )}
         </section>

@@ -124,8 +124,23 @@ export function removeBone(p: Project, id: Id): void {
   for (const c of bone.children) p.skeleton.bones[c].parentId = parentId
   delete p.skeleton.bones[id]
   const fallback = parentId ?? p.skeleton.rootOrder[0]
-  for (const part of Object.values(p.parts)) if (part.boneId === id) part.boneId = fallback
+  for (const part of Object.values(p.parts)) {
+    if (part.boneId === id) part.boneId = fallback
+    if (part.skin) part.skin.bones = part.skin.bones.filter(b => b !== id)
+  }
   for (const anim of Object.values(p.animations)) delete anim.boneTracks[id]
+}
+
+/** Configure skinning on a part. `bones` are the extra influencing bones; an empty list removes skinning. */
+export function setPartSkin(p: Project, partId: Id, patch: { bones?: Id[]; falloff?: number; cell?: number }): void {
+  const part = p.parts[partId]
+  if (!part) return
+  const cur = part.skin ?? { bones: [], falloff: Math.max(4, Math.round(p.canvas.size / 4)), cell: 4 }
+  const bones = (patch.bones ?? cur.bones).filter((id, i, arr) => id !== part.boneId && !!p.skeleton.bones[id] && arr.indexOf(id) === i)
+  const falloff = Math.max(1, patch.falloff ?? cur.falloff)
+  const cell = Math.max(1, Math.min(64, Math.round(patch.cell ?? cur.cell)))
+  if (bones.length === 0) delete part.skin
+  else part.skin = { bones, falloff, cell }
 }
 
 function isAncestor(p: Project, maybeAncestor: Id, of: Id): boolean {
@@ -371,6 +386,10 @@ export function validate(p: Project): string[] {
     if (part.solids) {
       if (part.solids.order.length !== Object.keys(part.solids.primitives).length) errs.push(`part ${part.name} solids order mismatch`)
       for (const prim of Object.values(part.solids.primitives)) if (!isVec3(prim.position) || !isVec3(prim.size) || !isVec3(prim.rotation)) errs.push(`solid ${prim.name} has invalid vectors`)
+    }
+    if (part.skin) {
+      for (const id of part.skin.bones) if (!bones[id]) errs.push(`part ${part.name} skin refers to missing bone ${id}`)
+      if (!(part.skin.falloff > 0) || !(part.skin.cell >= 1)) errs.push(`part ${part.name} skin settings invalid`)
     }
     for (const v of Object.values(part.variants)) {
       for (const [k, img] of Object.entries(v.images)) {

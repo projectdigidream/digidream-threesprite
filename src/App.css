@@ -419,3 +419,4 @@ input[type='text'], input:not([type]), input[inputmode] {
 .numgrid--3 .numfield__btn { width: 22px; min-width: 22px; }
 .numgrid--3 .numfield__ctl input { padding: 0 2px; }
 .numgrid--3 .numfield__label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.skin__bones { display: flex; flex-wrap: wrap; gap: 4px 12px; }
