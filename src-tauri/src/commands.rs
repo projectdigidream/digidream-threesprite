@@ -11,6 +11,22 @@ pub fn ping() -> String {
     format!("pong from {} {}", std::env::consts::OS, std::env::consts::ARCH)
 }
 
+/// Whether the process was started with `THREESPRITE_SELFTEST=1` (desktop automation).
+#[tauri::command]
+pub fn selftest_flag() -> bool {
+    std::env::var("THREESPRITE_SELFTEST").map(|v| v == "1").unwrap_or(false)
+}
+
+/// The self-test reports here; the line is printed for the launcher (stdout on
+/// desktop, logcat on Android) and the app exits when it was started for it.
+#[tauri::command]
+pub fn selftest_done(app: AppHandle, report: String) {
+    println!("SELFTEST {report}");
+    if selftest_flag() {
+        app.exit(0);
+    }
+}
+
 /// Raw-body round trip used by the smoke test: proves that a `Uint8Array`
 /// passed to `invoke` arrives as `InvokeBody::Raw` and that a `Response` of
 /// bytes comes back as an `ArrayBuffer`, on every platform.

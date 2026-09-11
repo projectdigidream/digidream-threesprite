@@ -98,7 +98,7 @@ export class PreviewScene {
   /** Called when the primary instance's shown view changes. */
   onView: ((view: ViewIndex, instanceViews: ViewIndex[]) => void) | null = null
 
-  constructor(canvas: HTMLCanvasElement, private readonly src: SceneSource) {
+  constructor(canvas: HTMLCanvasElement, src: SceneSource) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: false, powerPreference: 'low-power' })
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
     this.scene.background = new THREE.Color(0x181c26)

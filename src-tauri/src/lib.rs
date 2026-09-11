@@ -18,6 +18,8 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .invoke_handler(tauri::generate_handler![
             commands::ping,
+            commands::selftest_flag,
+            commands::selftest_done,
             commands::echo_bytes,
             commands::encode_png,
             commands::export_bundle,

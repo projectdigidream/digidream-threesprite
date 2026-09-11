@@ -17,6 +17,8 @@
     "fs:allow-remove",
     "fs:allow-rename",
     "fs:allow-copy-file",
+    "fs:allow-stat",
+    "fs:allow-lstat",
     "fs:scope-appdata-recursive",
     "fs:scope-appcache-recursive"
   ]

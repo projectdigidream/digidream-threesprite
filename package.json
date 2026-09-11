@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "dev:web": "vite --config vite.config.web.ts",
     "build:web": "tsc --noEmit && vite build --config vite.config.web.ts",
-    "typecheck": "tsc --noEmit -p tsconfig.test.json",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
     "tauri": "tauri",
     "test": "vitest",
     "test:run": "vitest run",
