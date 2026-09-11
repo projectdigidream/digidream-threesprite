@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useIsMobile } from '../../hooks/useIsMobile'
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts'
 import { useEditor } from '../../store/editorStore'
+import { startPlaybackLoop } from '../../store/playback'
 import NewProjectDialog from '../project/NewProjectDialog'
 import ProjectSettingsDialog from '../project/ProjectSettingsDialog'
 import DesktopLayout from './DesktopLayout'
@@ -16,6 +17,7 @@ export default function AppShell() {
   useKeyboardShortcuts()
 
   useEffect(() => { document.title = `${dirty ? '• ' : ''}${name} — ThreeSprite` }, [name, dirty])
+  useEffect(() => startPlaybackLoop(), [])
 
   return (
     <div className={`app ${mobile ? 'app--mobile' : 'app--desktop'}`}>

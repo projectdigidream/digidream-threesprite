@@ -1,0 +1,164 @@
+import { getKey, removeKey, setKey } from '../../domain/animation'
+import { restWorldRotation, sampleBone, samplePart } from '../../domain/pose'
+import { ensureBoneTrack, ensurePartTrack, reparentBone } from '../../domain/project'
+import type { Animation, Bone, Id, Interp, Part } from '../../domain/types'
+import { useEditor } from '../../store/editorStore'
+import { Icon } from '../ui/Icon'
+import { NumField } from '../ui/NumField'
+
+export default function Inspector() {
+  const mode = useEditor(s => s.ui.mode)
+  return (
+    <div className="panel inspector">
+      <div className="panel__header"><Icon name="settings" size={16} /> {mode === 'animate' ? 'Keys at frame' : 'Inspector'}</div>
+      {mode === 'animate' ? <AnimInspector /> : <RigInspector />}
+    </div>
+  )
+}
+
+// ── rest pose ────────────────────────────────────────────────────────────────
+
+function RigInspector() {
+  const doc = useEditor(s => s.doc)
+  const boneId = useEditor(s => s.ui.selectedBoneId)
+  const partId = useEditor(s => s.ui.selectedPartId)
+  const commit = useEditor(s => s.commit)
+  const bone = boneId ? doc.skeleton.bones[boneId] : null
+  const part = partId ? doc.parts[partId] : null
+
+  const setBone = (label: string, fn: (b: Bone) => void) => commit(label, d => { const b = boneId ? d.skeleton.bones[boneId] : null; if (b) fn(b) })
+  const setPart = (label: string, fn: (p: Part) => void) => commit(label, d => { const p = partId ? d.parts[partId] : null; if (p) fn(p) })
+
+  const descendants = new Set<Id>()
+  if (bone) {
+    const walk = (id: Id) => { descendants.add(id); for (const c of doc.skeleton.bones[id]?.children ?? []) walk(c) }
+    walk(bone.id)
+  }
+
+  return (
+    <div className="inspector__body">
+      {bone ? (
+        <section>
+          <h4>Bone</h4>
+          <label className="field"><span>Name</span><input value={bone.name} onChange={e => setBone('Rename bone', b => { b.name = e.target.value })} /></label>
+          <label className="field">
+            <span>Parent</span>
+            <select className="select" value={bone.parentId ?? ''} onChange={e => commit('Reparent bone', d => reparentBone(d, bone.id, e.target.value || null))}>
+              <option value="">(none — root)</option>
+              {Object.values(doc.skeleton.bones).filter(b => !descendants.has(b.id)).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+            </select>
+          </label>
+          <div className="numgrid">
+            <NumField label="X" value={bone.rest.x} onCommit={v => setBone('Bone x', b => { b.rest.x = v })} />
+            <NumField label="Y" value={bone.rest.y} onCommit={v => setBone('Bone y', b => { b.rest.y = v })} />
+            <NumField label="Rotation" value={bone.rest.rotation} suffix="°" onCommit={v => setBone('Bone rotation', b => { b.rest.rotation = v })} />
+            <NumField label="Length" value={bone.length} min={1} onCommit={v => setBone('Bone length', b => { b.length = v })} />
+            <NumField label="Scale X" value={bone.rest.scaleX} step={0.1} onCommit={v => setBone('Bone scale', b => { b.rest.scaleX = v })} />
+            <NumField label="Scale Y" value={bone.rest.scaleY} step={0.1} onCommit={v => setBone('Bone scale', b => { b.rest.scaleY = v })} />
+          </div>
+          <small>Position is in the parent bone's space (canvas space for roots). Rotation 90° points up.</small>
+        </section>
+      ) : <div className="panel__empty">Select a bone.</div>}
+
+      {part && (
+        <section>
+          <h4>Part</h4>
+          <label className="field"><span>Name</span><input value={part.name} onChange={e => setPart('Rename part', p => { p.name = e.target.value })} /></label>
+          <label className="field">
+            <span>Bone</span>
+            <select className="select" value={part.boneId} onChange={e => setPart('Attach part', p => { p.boneId = e.target.value })}>
+              {Object.values(doc.skeleton.bones).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+            </select>
+          </label>
+          <div className="numgrid">
+            <NumField label="Offset X" value={part.offset.x} onCommit={v => setPart('Part offset', p => { p.offset.x = v })} />
+            <NumField label="Offset Y" value={part.offset.y} onCommit={v => setPart('Part offset', p => { p.offset.y = v })} />
+            <NumField label="Rotation" value={part.rotation} suffix="°" onCommit={v => setPart('Part rotation', p => { p.rotation = v })} />
+            <NumField label="Pivot X" value={part.pivot.x} onCommit={v => setPart('Part pivot', p => { p.pivot.x = v })} />
+            <NumField label="Pivot Y" value={part.pivot.y} onCommit={v => setPart('Part pivot', p => { p.pivot.y = v })} />
+          </div>
+          <div className="btn-row">
+            <button className="text-btn" onClick={() => setPart('Upright part', p => { p.rotation = -restWorldRotation(doc.skeleton, p.boneId) })}>Make upright</button>
+            <button className="text-btn" onClick={() => setPart('Center pivot', p => { const img = Object.values(p.variants[p.defaultVariant]?.images ?? {})[0]; if (img) p.pivot = { x: Math.floor(img.width / 2), y: img.height } })}>Pivot at feet</button>
+          </div>
+          <small>Drag the pink pivot cross on the canvas to move where the image hangs on its bone.</small>
+        </section>
+      )}
+    </div>
+  )
+}
+
+// ── animation keys ───────────────────────────────────────────────────────────
+
+const INTERPS: Interp[] = ['linear', 'easeInOut', 'step']
+
+function AnimInspector() {
+  const doc = useEditor(s => s.doc)
+  const animId = useEditor(s => s.ui.animId)
+  const frame = useEditor(s => s.ui.frame)
+  const boneId = useEditor(s => s.ui.selectedBoneId)
+  const partId = useEditor(s => s.ui.selectedPartId)
+  const commit = useEditor(s => s.commit)
+  const anim = animId ? doc.animations[animId] : null
+  const bone = boneId ? doc.skeleton.bones[boneId] : null
+  const part = partId ? doc.parts[partId] : null
+  if (!anim) return <div className="panel__empty">No animation. Add one in the timeline.</div>
+
+  const withAnim = (label: string, fn: (a: Animation) => void) => commit(label, d => { const a = d.animations[anim.id]; if (a) fn(a) })
+  const bs = bone ? sampleBone(anim, bone.id, frame) : null
+  const bt = bone ? anim.boneTracks[bone.id] : undefined
+  const hasKey = (keys: { frame: number }[] | undefined) => !!keys?.some(k => k.frame === frame)
+
+  const keyBadge = (has: boolean, onToggle: () => void, title: string) => (
+    <button type="button" className={`key-badge ${has ? 'is-keyed' : ''}`} title={title} onClick={onToggle}>◆</button>
+  )
+
+  const ps = part ? samplePart(anim, part, frame) : null
+  const pt = part ? anim.partTracks[part.id] : undefined
+  const interpAt = bt ? (getKey(bt.rotation, frame) ?? getKey(bt.translate, frame) ?? getKey(bt.scale, frame))?.interp : undefined
+
+  return (
+    <div className="inspector__body">
+      <small>Frame {frame + 1} of {anim.frameCount} · drag bone handles on the canvas to key them, or type values here.</small>
+      {bone && bs ? (
+        <section>
+          <h4>{bone.name}</h4>
+          <div className="numgrid">
+            <NumField label="Rotation" suffix="°" value={bs.rotation} extra={keyBadge(hasKey(bt?.rotation), () => withAnim('Toggle key', a => { const t = ensureBoneTrack(a, bone.id); if (!removeKey(t.rotation, frame)) setKey(t.rotation, frame, bs.rotation) }), 'Rotation key at this frame')}
+              onCommit={v => withAnim('Key rotation', a => setKey(ensureBoneTrack(a, bone.id).rotation, frame, v))} />
+            <NumField label="Move X" value={bs.translate.x} extra={keyBadge(hasKey(bt?.translate), () => withAnim('Toggle key', a => { const t = ensureBoneTrack(a, bone.id); if (!removeKey(t.translate, frame)) setKey(t.translate, frame, { ...bs.translate }) }), 'Translate key at this frame')}
+              onCommit={v => withAnim('Key move', a => setKey(ensureBoneTrack(a, bone.id).translate, frame, { x: v, y: bs.translate.y }))} />
+            <NumField label="Move Y" value={bs.translate.y} onCommit={v => withAnim('Key move', a => setKey(ensureBoneTrack(a, bone.id).translate, frame, { x: bs.translate.x, y: v }))} />
+            <NumField label="Scale X" step={0.1} value={bs.scale.x} extra={keyBadge(hasKey(bt?.scale), () => withAnim('Toggle key', a => { const t = ensureBoneTrack(a, bone.id); if (!removeKey(t.scale, frame)) setKey(t.scale, frame, { ...bs.scale }) }), 'Scale key at this frame')}
+              onCommit={v => withAnim('Key scale', a => setKey(ensureBoneTrack(a, bone.id).scale, frame, { x: v, y: bs.scale.y }))} />
+            <NumField label="Scale Y" step={0.1} value={bs.scale.y} onCommit={v => withAnim('Key scale', a => setKey(ensureBoneTrack(a, bone.id).scale, frame, { x: bs.scale.x, y: v }))} />
+          </div>
+          <div className="btn-row">
+            <label className="field field--row"><span>Ease</span>
+              <select className="select" value={interpAt ?? 'linear'} disabled={!interpAt} onChange={e => withAnim('Key interpolation', a => { const t = a.boneTracks[bone.id]; if (!t) return; for (const keys of [t.rotation, t.translate, t.scale]) { const k = keys.find(x => x.frame === frame); if (k) k.interp = e.target.value as Interp } })}>
+                {INTERPS.map(i => <option key={i} value={i}>{i}</option>)}
+              </select>
+            </label>
+            <button className="text-btn" onClick={() => withAnim('Key all', a => { const t = ensureBoneTrack(a, bone.id); setKey(t.rotation, frame, bs.rotation); setKey(t.translate, frame, { ...bs.translate }); setKey(t.scale, frame, { ...bs.scale }) })}>Key all</button>
+            <button className="text-btn" onClick={() => withAnim('Delete keys', a => { const t = a.boneTracks[bone.id]; if (!t) return; removeKey(t.rotation, frame); removeKey(t.translate, frame); removeKey(t.scale, frame) })}>Delete keys</button>
+          </div>
+        </section>
+      ) : <div className="panel__empty">Select a bone in the timeline.</div>}
+      {part && ps && (
+        <section>
+          <h4>{part.name}</h4>
+          <label className="field field--row">
+            <input type="checkbox" checked={ps.visible} onChange={e => withAnim('Key visibility', a => setKey(ensurePartTrack(a, part.id).visible, frame, e.target.checked, 'step'))} />
+            <span>Visible {keyBadge(hasKey(pt?.visible), () => withAnim('Toggle key', a => { const t = ensurePartTrack(a, part.id); if (!removeKey(t.visible, frame)) setKey(t.visible, frame, ps.visible, 'step') }), 'Visibility key at this frame')}</span>
+          </label>
+          <label className="field">
+            <span>Variant {keyBadge(hasKey(pt?.variant), () => withAnim('Toggle key', a => { const t = ensurePartTrack(a, part.id); if (!removeKey(t.variant, frame)) setKey(t.variant, frame, ps.variantId, 'step') }), 'Variant key at this frame')}</span>
+            <select className="select" value={ps.variantId} onChange={e => withAnim('Key variant', a => setKey(ensurePartTrack(a, part.id).variant, frame, e.target.value, 'step'))}>
+              {part.variantOrder.map(v => <option key={v} value={v}>{part.variants[v].name}</option>)}
+            </select>
+          </label>
+        </section>
+      )}
+    </div>
+  )
+}

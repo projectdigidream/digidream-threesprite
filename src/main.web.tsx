@@ -1,6 +1,9 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
+import { exposeDevStore } from './store/devExpose'
+
+exposeDevStore()
 
 // Browser build entry. Identical tree; platform differences are decided at
 // runtime by `isTauri()` so there is exactly one app.

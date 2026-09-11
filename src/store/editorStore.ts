@@ -17,10 +17,12 @@ setAutoFreeze(false)
 
 export type Mode = 'draw' | 'rig' | 'animate' | 'preview' | 'export'
 export type ToolId = 'pencil' | 'eraser' | 'fill' | 'eyedropper' | 'select' | 'move' | 'hand'
+export type RigTool = 'select' | 'addBone'
 
 export interface UiState {
   mode: Mode
   tool: ToolId
+  rigTool: RigTool
   brushSize: number
   view: ViewIndex
   animId: Id | null
@@ -44,6 +46,8 @@ export interface UiState {
   spread: boolean
   /** Facing of the single preview instance, turns. */
   previewFacing: number
+  /** Facing arrows and labels in the 3D preview. */
+  showArrows: boolean
 }
 
 export type HistoryEntry =
@@ -77,6 +81,7 @@ export function defaultUi(doc: Project): UiState {
   return reconcileUi(doc, {
     mode: 'draw',
     tool: 'pencil',
+    rigTool: 'select',
     brushSize: 1,
     view: 1,
     animId: doc.animationOrder[0] ?? null,
@@ -96,6 +101,7 @@ export function defaultUi(doc: Project): UiState {
     selection: null,
     spread: false,
     previewFacing: 0,
+    showArrows: true,
   })
 }
 

@@ -1,21 +1,26 @@
 /**
- * The editing surface. One <canvas> shows the composed frame of the current
- * view through a zoom/pan transform; drawing tools map pointer positions
- * through the selected part's matrix into that part's image, so what you
- * paint lands exactly where the cursor is, whatever the rig does to the part.
+ * The editing surface. One <canvas> shows the composed frame of a view
+ * through a zoom/pan transform; drawing tools map pointer positions through
+ * the selected part's matrix into that part's image, so what you paint lands
+ * exactly where the cursor is, whatever the rig does to the part.
+ *
+ * Standalone (default): the view, mode, zoom and pan come from the store.
+ * Embedded (`embedded` + `view`): a fixed view, always in draw mode, with its
+ * own zoom/pan, so several can sit side by side in the studio layout.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { composeFrame, imageKey, partCanvasMatrix } from '../../core/raster/rasterizer'
 import { fillAt, strokeSegment } from '../../core/tools/brush'
-import { ZOOM_MAX, ZOOM_MIN, centeredPan, clampZoom, fitZoom, nextZoom, snapZoom, zoomAbout } from '../../core/tools/zoom'
+import { centeredPan, clampZoom, fitZoom, nextZoom, snapZoom, zoomAbout } from '../../core/tools/zoom'
 import { blitCopy, clearRect, cloneImage, createImage, cropImage, TRANSPARENT, type Rect } from '../../domain/image'
-import { getPartImage } from '../../domain/project'
-import { apply, invert, type Mat2D } from '../../domain/transform'
-import type { Id, PartImage, Project } from '../../domain/types'
+import { addBone, getPartImage } from '../../domain/project'
+import { evalPose } from '../../domain/pose'
+import { apply, invert, rotationOf, type Mat2D } from '../../domain/transform'
+import type { Id, PartImage, Project, Vec2 } from '../../domain/types'
 import { isDerived, mirrorOf, viewLabel } from '../../domain/views'
 import { isTypingTarget } from '../../hooks/useKeyboardShortcuts'
 import { frameCache } from '../../store/caches'
-import { editorStore, useEditor, type EditorState } from '../../store/editorStore'
+import { editorStore, type EditorState, type Mode, useEditor } from '../../store/editorStore'
 import { drawRigOverlay, hitRig, type RigDrag, rigDragMove } from './rigOverlay'
 
 type Pt = { x: number; y: number }
@@ -28,6 +33,7 @@ type Gesture =
   | { kind: 'pan'; pointerId: number; startClient: Pt; startPan: Pt }
   | { kind: 'pinch'; a: number; b: number; startDist: number; startZoom: number; startMid: Pt; startPan: Pt }
   | { kind: 'rig'; pointerId: number; drag: RigDrag }
+  | { kind: 'addBone'; pointerId: number; root: Pt; tip: Pt }
 
 interface Target {
   partId: Id
@@ -41,17 +47,17 @@ interface Target {
   frame: number
 }
 
-function getTarget(s: EditorState): Target | null {
+function getTarget(s: EditorState, view: number, mode: Mode): Target | null {
   const { doc, ui } = s
   const partId = ui.selectedPartId
   if (!partId || !doc.parts[partId]) return null
   const part = doc.parts[partId]
   const variantId = ui.variantId && part.variants[ui.variantId] ? ui.variantId : part.defaultVariant
-  const derived = isDerived(doc.views.count, doc.views.mirror, ui.view)
-  const srcView = derived ? mirrorOf(doc.views.count, ui.view) : ui.view
-  const animId = ui.mode === 'draw' ? null : ui.animId
-  const frame = ui.mode === 'draw' ? 0 : ui.frame
-  return { partId, variantId, view: ui.view, srcView, derived, image: getPartImage(doc, partId, variantId, srcView), m: partCanvasMatrix(doc, animId, frame, partId), animId, frame }
+  const derived = isDerived(doc.views.count, doc.views.mirror, view)
+  const srcView = derived ? mirrorOf(doc.views.count, view) : view
+  const animId = mode === 'draw' ? null : ui.animId
+  const frame = mode === 'draw' ? 0 : ui.frame
+  return { partId, variantId, view, srcView, derived, image: getPartImage(doc, partId, variantId, srcView), m: partCanvasMatrix(doc, animId, frame, partId), animId, frame }
 }
 
 /** Size for a new image of a part: match its existing images, else the canvas. */
@@ -80,7 +86,14 @@ function nearestImageView(doc: Project, partId: Id, variantId: Id, view: number)
 
 function dist(a: Pt, b: Pt): number { return Math.hypot(a.x - b.x, a.y - b.y) }
 
-export default function PixelCanvas() {
+interface Props {
+  /** Fixed view for an embedded canvas. */
+  view?: number
+  /** Own zoom/pan, always draw mode, no rig overlay. */
+  embedded?: boolean
+}
+
+export default function PixelCanvas({ view: viewProp, embedded = false }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const offRef = useRef<HTMLCanvasElement | null>(null)
@@ -95,15 +108,27 @@ export default function PixelCanvas() {
   const rafRef = useRef(0)
   const sizeRef = useRef({ w: 0, h: 0 })
   const fittedDocRef = useRef<string | null>(null)
+  const localZpRef = useRef<{ zoom: number; pan: Vec2 }>({ zoom: 8, pan: { x: 0, y: 0 } })
   const [, force] = useState(0)
 
-  const mode = useEditor(s => s.ui.mode)
+  const storeMode = useEditor(s => s.ui.mode)
   const tool = useEditor(s => s.ui.tool)
-  const view = useEditor(s => s.ui.view)
+  const rigTool = useEditor(s => s.ui.rigTool)
+  const storeView = useEditor(s => s.ui.view)
   const revision = useEditor(s => s.revision)
   const selectedPartId = useEditor(s => s.ui.selectedPartId)
   const variantId = useEditor(s => s.ui.variantId)
   const docViews = useEditor(s => s.doc.views)
+
+  const mode: Mode = embedded ? 'draw' : storeMode
+  const view = viewProp ?? storeView
+  const viewOf = (s: EditorState) => viewProp ?? s.ui.view
+  const modeOf = (s: EditorState): Mode => (embedded ? 'draw' : s.ui.mode)
+  const zpOf = (s: EditorState) => (embedded ? localZpRef.current : { zoom: s.ui.zoom, pan: s.ui.pan })
+  const setZp = (zoom: number, pan: Vec2) => {
+    if (embedded) { localZpRef.current = { zoom, pan }; schedule() }
+    else editorStore.getState().setUi({ zoom, pan })
+  }
 
   // ── drawing ────────────────────────────────────────────────────────────────
 
@@ -126,9 +151,11 @@ export default function PixelCanvas() {
     ctx.scale(dpr, dpr)
 
     const n = doc.canvas.size
-    const z = ui.zoom
-    const px = ui.pan.x
-    const py = ui.pan.y
+    const { zoom: z, pan } = zpOf(s)
+    const px = pan.x
+    const py = pan.y
+    const curMode = modeOf(s)
+    const curView = viewOf(s)
 
     // checkerboard under the canvas area
     if (!checkerRef.current) {
@@ -146,12 +173,12 @@ export default function PixelCanvas() {
     ctx.restore()
 
     // compose the frame
-    const showAnim = ui.mode === 'animate' || ui.mode === 'preview'
+    const showAnim = curMode === 'animate'
     const animId = showAnim ? ui.animId : null
     const frame = showAnim ? ui.frame : 0
-    const dim = ui.mode === 'draw' && ui.ghostOthers && ui.selectedPartId && doc.partOrder.length > 1 ? { except: ui.selectedPartId, alpha: 0.35 } : undefined
+    const dim = curMode === 'draw' && ui.ghostOthers && ui.selectedPartId && doc.partOrder.length > 1 ? { except: ui.selectedPartId, alpha: 0.35 } : undefined
     if (!outRef.current || outRef.current.length !== n * n * 4) outRef.current = new Uint8ClampedArray(n * n * 4)
-    const pixels = composeFrame(doc, animId, frame, ui.view, { overrides: overridesRef.current, dim, out: outRef.current })
+    const pixels = composeFrame(doc, animId, frame, curView, { overrides: overridesRef.current, dim, out: outRef.current })
 
     if (!offRef.current) offRef.current = document.createElement('canvas')
     const off = offRef.current
@@ -164,7 +191,7 @@ export default function PixelCanvas() {
     const anim = animId ? doc.animations[animId] : null
     if (showAnim && ui.onion && anim && anim.frameCount > 1) {
       const prevFrame = (frame - 1 + anim.frameCount) % anim.frameCount
-      const prev = frameCache.get(animId, prevFrame, ui.view)
+      const prev = frameCache.get(animId, prevFrame, curView)
       if (!onionRef.current) onionRef.current = document.createElement('canvas')
       const oc = onionRef.current
       if (oc.width !== n || oc.height !== n) { oc.width = n; oc.height = n }
@@ -194,10 +221,10 @@ export default function PixelCanvas() {
     ctx.lineWidth = 2
     ctx.beginPath(); ctx.moveTo(px - 8, py + n * z + 1); ctx.lineTo(px + n * z + 8, py + n * z + 1); ctx.stroke()
 
-    const t = getTarget(s)
+    const t = getTarget(s, curView, curMode)
     const toScreen = (m: Mat2D, x: number, y: number): Pt => { const p = apply(m, x, y); return { x: px + p.x * z, y: py + p.y * z } }
 
-    if (t && t.m && ui.mode === 'draw') {
+    if (t && t.m && curMode === 'draw') {
       // mirror axis of the edited image
       if (ui.mirrorDraw && t.image) {
         const a = toScreen(t.m, t.image.width / 2, 0)
@@ -205,9 +232,10 @@ export default function PixelCanvas() {
         ctx.save(); ctx.setLineDash([4, 4]); ctx.strokeStyle = 'rgba(94,200,255,0.9)'; ctx.lineWidth = 1
         ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); ctx.restore()
       }
-      // selection
+      // selection (only on the canvas of the active view)
       const g = gestureRef.current
-      const sel = g.kind === 'move' ? { ...g.rect, x: g.rect.x + g.delta.x, y: g.rect.y + g.delta.y } : ui.selection
+      const showSel = !embedded || curView === ui.view
+      const sel = g.kind === 'move' ? { ...g.rect, x: g.rect.x + g.delta.x, y: g.rect.y + g.delta.y } : showSel ? ui.selection : null
       if (sel) {
         const c = [toScreen(t.m, sel.x, sel.y), toScreen(t.m, sel.x + sel.w, sel.y), toScreen(t.m, sel.x + sel.w, sel.y + sel.h), toScreen(t.m, sel.x, sel.y + sel.h)]
         ctx.save(); ctx.setLineDash([5, 3]); ctx.strokeStyle = '#fff'; ctx.lineWidth = 1
@@ -222,9 +250,16 @@ export default function PixelCanvas() {
       }
     }
 
-    if (ui.mode === 'rig' || ui.mode === 'animate') {
+    if (curMode === 'rig' || curMode === 'animate') {
       drawRigOverlay(ctx, doc, ui, animId, frame, (x, y) => ({ x: px + x * z, y: py + y * z }), gestureRef.current.kind === 'rig' ? gestureRef.current.drag : null)
+      const g = gestureRef.current
+      if (g.kind === 'addBone') {
+        ctx.save(); ctx.strokeStyle = '#ffb454'; ctx.lineWidth = 2; ctx.setLineDash([6, 4])
+        ctx.beginPath(); ctx.moveTo(px + g.root.x * z, py + g.root.y * z); ctx.lineTo(px + g.tip.x * z, py + g.tip.y * z); ctx.stroke()
+        ctx.beginPath(); ctx.arc(px + g.root.x * z, py + g.root.y * z, 5, 0, Math.PI * 2); ctx.stroke(); ctx.restore()
+      }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const schedule = useCallback(() => {
@@ -245,11 +280,14 @@ export default function PixelCanvas() {
       if (fittedDocRef.current !== s.doc.id && sizeRef.current.w > 0) {
         fittedDocRef.current = s.doc.id
         fitView()
+      } else if (embedded) {
+        fitView()
       }
       schedule()
     })
     ro.observe(el)
     return () => ro.disconnect()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [schedule])
 
   // refit when a different document is loaded
@@ -257,21 +295,22 @@ export default function PixelCanvas() {
     const s = editorStore.getState()
     if (fittedDocRef.current !== s.doc.id && sizeRef.current.w > 0) { fittedDocRef.current = s.doc.id; fitView() }
     schedule()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [revision, schedule])
 
   function fitView() {
     const { doc } = editorStore.getState()
     const { w, h } = sizeRef.current
-    const zoom = fitZoom(doc.canvas.size, w, h)
-    editorStore.getState().setUi({ zoom, pan: centeredPan(doc.canvas.size, zoom, w, h) })
+    const zoom = fitZoom(doc.canvas.size, w, h, embedded ? 0.96 : 0.9)
+    setZp(zoom, centeredPan(doc.canvas.size, zoom, w, h))
   }
 
   // ── coordinate helpers ─────────────────────────────────────────────────────
 
   const clientToCanvas = (cx: number, cy: number): Pt => {
     const r = canvasRef.current!.getBoundingClientRect()
-    const { ui } = editorStore.getState()
-    return { x: (cx - r.left - ui.pan.x) / ui.zoom, y: (cy - r.top - ui.pan.y) / ui.zoom }
+    const { zoom, pan } = zpOf(editorStore.getState())
+    return { x: (cx - r.left - pan.x) / zoom, y: (cy - r.top - pan.y) / zoom }
   }
   const clientToLocal = (cx: number, cy: number): Pt => {
     const r = canvasRef.current!.getBoundingClientRect()
@@ -312,14 +351,37 @@ export default function PixelCanvas() {
     schedule()
   }
 
+  const endAddBone = (commit: boolean) => {
+    const g = gestureRef.current
+    if (g.kind !== 'addBone') return
+    gestureRef.current = { kind: 'idle' }
+    if (commit) {
+      const s = editorStore.getState()
+      const len = dist(g.root, g.tip)
+      if (len >= 2) {
+        const parentId = s.ui.selectedBoneId
+        const pose = evalPose(s.doc.skeleton, null, 0)
+        const parentWorld = parentId ? pose.get(parentId) ?? null : null
+        const inv = parentWorld ? invert(parentWorld) : null
+        const local = inv ? apply(inv, g.root.x, g.root.y) : g.root
+        const worldDeg = (-Math.atan2(g.tip.y - g.root.y, g.tip.x - g.root.x) * 180) / Math.PI
+        const rotation = worldDeg - (parentWorld ? rotationOf(parentWorld) : 0)
+        let id: Id | null = null
+        s.commit('Add bone', d => { id = addBone(d, { parentId, rest: { x: Math.round(local.x), y: Math.round(local.y), rotation: Math.round(rotation) }, length: Math.round(len) }).id })
+        if (id) s.setUi({ selectedBoneId: id, rigTool: 'select' })
+      }
+    }
+    schedule()
+  }
+
   const pickColor = (c: Pt) => {
     const s = editorStore.getState()
     const { doc, ui } = s
     const n = doc.canvas.size
     const x = Math.floor(c.x), y = Math.floor(c.y)
     if (x < 0 || y < 0 || x >= n || y >= n) return
-    const showAnim = ui.mode !== 'draw'
-    const full = composeFrame(doc, showAnim ? ui.animId : null, showAnim ? ui.frame : 0, ui.view)
+    const curMode = modeOf(s)
+    const full = composeFrame(doc, curMode === 'animate' ? ui.animId : null, curMode === 'animate' ? ui.frame : 0, viewOf(s))
     const i = (y * n + x) * 4
     if (full[i + 3] === 0) return
     s.setUi({ primary: [full[i], full[i + 1], full[i + 2], full[i + 3]] })
@@ -328,8 +390,8 @@ export default function PixelCanvas() {
   const startPinch = (a: number, b: number) => {
     const pa = pointersRef.current.get(a)!
     const pb = pointersRef.current.get(b)!
-    const { ui } = editorStore.getState()
-    gestureRef.current = { kind: 'pinch', a, b, startDist: Math.max(1, dist(pa, pb)), startZoom: ui.zoom, startMid: { x: (pa.x + pb.x) / 2, y: (pa.y + pb.y) / 2 }, startPan: { ...ui.pan } }
+    const { zoom, pan } = zpOf(editorStore.getState())
+    gestureRef.current = { kind: 'pinch', a, b, startDist: Math.max(1, dist(pa, pb)), startZoom: zoom, startMid: { x: (pa.x + pb.x) / 2, y: (pa.y + pb.y) / 2 }, startPan: { ...pan } }
   }
 
   const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -344,6 +406,7 @@ export default function PixelCanvas() {
       const ids = [...pointersRef.current.keys()]
       if (gestureRef.current.kind === 'stroke') endStroke(false)
       if (gestureRef.current.kind === 'move') endMove(false)
+      if (gestureRef.current.kind === 'addBone') endAddBone(false)
       if (gestureRef.current.kind !== 'pinch') startPinch(ids[0], ids[1])
       return
     }
@@ -351,29 +414,39 @@ export default function PixelCanvas() {
 
     const s = editorStore.getState()
     const { ui, doc } = s
+    const curMode = modeOf(s)
+    const curView = viewOf(s)
+    const { zoom, pan } = zpOf(s)
+    if (embedded && ui.view !== curView) s.setUi({ view: curView })
     const c = clientToCanvas(e.clientX, e.clientY)
-    const wantPan = ui.tool === 'hand' || e.button === 1 || spaceRef.current || (ui.mode !== 'draw' && ui.mode !== 'rig' && ui.mode !== 'animate')
+    const wantPan = ui.tool === 'hand' || e.button === 1 || spaceRef.current || (curMode !== 'draw' && curMode !== 'rig' && curMode !== 'animate')
 
-    if (ui.mode === 'rig' || ui.mode === 'animate') {
+    if (curMode === 'rig' || curMode === 'animate') {
       if (!wantPan) {
-        const hit = hitRig(doc, ui, ui.mode === 'animate' ? ui.animId : null, ui.mode === 'animate' ? ui.frame : 0, c, (e.pointerType === 'touch' ? 24 : 14) / ui.zoom)
+        if (curMode === 'rig' && ui.rigTool === 'addBone') {
+          gestureRef.current = { kind: 'addBone', pointerId: e.pointerId, root: c, tip: c }
+          schedule()
+          return
+        }
+        const hit = hitRig(doc, ui, curMode === 'animate' ? ui.animId : null, curMode === 'animate' ? ui.frame : 0, c, (e.pointerType === 'touch' ? 24 : 14) / zoom)
         if (hit) {
+          if (hit.boneId !== ui.selectedBoneId && hit.handle !== 'pivot') s.setUi({ selectedBoneId: hit.boneId })
           gestureRef.current = { kind: 'rig', pointerId: e.pointerId, drag: hit }
           schedule()
           return
         }
       }
-      gestureRef.current = { kind: 'pan', pointerId: e.pointerId, startClient: { x: e.clientX, y: e.clientY }, startPan: { ...ui.pan } }
+      gestureRef.current = { kind: 'pan', pointerId: e.pointerId, startClient: { x: e.clientX, y: e.clientY }, startPan: { ...pan } }
       return
     }
 
     if (wantPan) {
-      gestureRef.current = { kind: 'pan', pointerId: e.pointerId, startClient: { x: e.clientX, y: e.clientY }, startPan: { ...ui.pan } }
+      gestureRef.current = { kind: 'pan', pointerId: e.pointerId, startClient: { x: e.clientX, y: e.clientY }, startPan: { ...pan } }
       return
     }
     if (e.button === 2) { pickColor(c); return }
 
-    const t = getTarget(s)
+    const t = getTarget(s, curView, curMode)
     if (ui.tool === 'eyedropper') { pickColor(c); return }
     if (!t || !t.m) return
     if (t.derived) return // read-only view; the overlay explains
@@ -443,13 +516,13 @@ export default function PixelCanvas() {
       const mid = { x: (pa.x + pb.x) / 2, y: (pa.y + pb.y) / 2 }
       const newZoom = clampZoom(g.startZoom * (d / g.startDist))
       const pan = zoomAbout(g.startZoom, newZoom, g.startPan, g.startMid.x, g.startMid.y)
-      s.setUi({ zoom: newZoom, pan: { x: pan.x + (mid.x - g.startMid.x), y: pan.y + (mid.y - g.startMid.y) } })
+      setZp(newZoom, { x: pan.x + (mid.x - g.startMid.x), y: pan.y + (mid.y - g.startMid.y) })
       return
     }
     if (g.kind === 'idle' || g.pointerId !== e.pointerId) return
 
     if (g.kind === 'pan') {
-      s.setUi({ pan: { x: g.startPan.x + (e.clientX - g.startClient.x), y: g.startPan.y + (e.clientY - g.startClient.y) } })
+      setZp(zpOf(s).zoom, { x: g.startPan.x + (e.clientX - g.startClient.x), y: g.startPan.y + (e.clientY - g.startClient.y) })
       return
     }
     const c = clientToCanvas(e.clientX, e.clientY)
@@ -458,7 +531,12 @@ export default function PixelCanvas() {
       schedule()
       return
     }
-    const t = getTarget(s)
+    if (g.kind === 'addBone') {
+      g.tip = c
+      schedule()
+      return
+    }
+    const t = getTarget(s, viewOf(s), modeOf(s))
     if (!t) return
     const ip = canvasToImage(t, c)
     if (!ip) return
@@ -495,12 +573,11 @@ export default function PixelCanvas() {
     if (pointersRef.current.size === 0) ignoreUntilUpRef.current = false
     if (g.kind === 'pinch') {
       if (e.pointerId === g.a || e.pointerId === g.b) {
-        // snap to a crisp level about the last midpoint
-        const s = editorStore.getState()
-        const z = s.ui.zoom
-        const snapped = snapZoom(z)
+        // snap to a crisp level about the centre
+        const { zoom, pan } = zpOf(editorStore.getState())
+        const snapped = snapZoom(zoom)
         const { w, h } = sizeRef.current
-        s.setUi({ zoom: snapped, pan: zoomAbout(z, snapped, s.ui.pan, w / 2, h / 2) })
+        setZp(snapped, zoomAbout(zoom, snapped, pan, w / 2, h / 2))
         gestureRef.current = { kind: 'idle' }
         ignoreUntilUpRef.current = pointersRef.current.size > 0
       }
@@ -509,6 +586,7 @@ export default function PixelCanvas() {
     if (g.kind === 'idle' || g.pointerId !== e.pointerId) return
     if (g.kind === 'stroke') { endStroke(true); return }
     if (g.kind === 'move') { endMove(true); return }
+    if (g.kind === 'addBone') { endAddBone(true); return }
     if (g.kind === 'rig') {
       const s = editorStore.getState()
       g.drag.finish(s)
@@ -525,6 +603,7 @@ export default function PixelCanvas() {
     const g = gestureRef.current
     if (g.kind === 'stroke') endStroke(false)
     else if (g.kind === 'move') endMove(false)
+    else if (g.kind === 'addBone') endAddBone(false)
     else if (g.kind === 'rig') { g.drag.cancel(editorStore.getState()); gestureRef.current = { kind: 'idle' } }
     else gestureRef.current = { kind: 'idle' }
     if (pointersRef.current.size === 0) ignoreUntilUpRef.current = false
@@ -537,22 +616,24 @@ export default function PixelCanvas() {
     if (!canvas) return
     const onWheel = (e: WheelEvent) => {
       e.preventDefault()
-      const s = editorStore.getState()
+      const { zoom, pan } = zpOf(editorStore.getState())
       const local = clientToLocal(e.clientX, e.clientY)
       if (e.ctrlKey || e.metaKey) {
         const factor = Math.exp(-e.deltaY * 0.01)
-        const newZoom = clampZoom(s.ui.zoom * factor)
-        s.setUi({ zoom: newZoom, pan: zoomAbout(s.ui.zoom, newZoom, s.ui.pan, local.x, local.y) })
+        const newZoom = clampZoom(zoom * factor)
+        setZp(newZoom, zoomAbout(zoom, newZoom, pan, local.x, local.y))
       } else {
-        s.setUi(ui => ({ pan: { x: ui.pan.x - e.deltaX, y: ui.pan.y - e.deltaY } }))
+        setZp(zoom, { x: pan.x - e.deltaX, y: pan.y - e.deltaY })
       }
     }
     canvas.addEventListener('wheel', onWheel, { passive: false })
     return () => canvas.removeEventListener('wheel', onWheel)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // canvas-local keys: zoom, fit, space-pan, delete selection, escape
+  // canvas-local keys: zoom, fit, space-pan, delete selection, escape (main canvas only)
   useEffect(() => {
+    if (embedded) return
     const onDown = (e: KeyboardEvent) => {
       if (isTypingTarget(e.target)) return
       const s = editorStore.getState()
@@ -566,9 +647,9 @@ export default function PixelCanvas() {
       if (e.key === '=' || e.key === '+') zoomStep(1)
       else if (e.key === '-') zoomStep(-1)
       else if (e.key === '0') fitView()
-      else if (e.key === 'Escape') { s.setUi({ selection: null }); if (gestureRef.current.kind === 'stroke') endStroke(false) }
+      else if (e.key === 'Escape') { s.setUi({ selection: null, rigTool: 'select' }); if (gestureRef.current.kind === 'stroke') endStroke(false) }
       else if ((e.key === 'Delete' || e.key === 'Backspace') && s.ui.selection && s.ui.mode === 'draw') {
-        const t = getTarget(s)
+        const t = getTarget(s, s.ui.view, 'draw')
         if (t?.image && !t.derived) {
           const working = cloneImage(t.image)
           clearRect(working, s.ui.selection)
@@ -581,27 +662,27 @@ export default function PixelCanvas() {
     window.addEventListener('keyup', onUp)
     return () => { window.removeEventListener('keydown', onDown); window.removeEventListener('keyup', onUp) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [embedded])
 
   function zoomStep(dir: 1 | -1) {
-    const s = editorStore.getState()
+    const { zoom, pan } = zpOf(editorStore.getState())
     const { w, h } = sizeRef.current
-    const z = nextZoom(s.ui.zoom, dir)
-    s.setUi({ zoom: z, pan: zoomAbout(s.ui.zoom, z, s.ui.pan, w / 2, h / 2) })
+    const z = nextZoom(zoom, dir)
+    setZp(z, zoomAbout(zoom, z, pan, w / 2, h / 2))
   }
 
   // ── overlays (React) ───────────────────────────────────────────────────────
 
   const state = editorStore.getState()
-  const target = getTarget(state)
-  void revision; void selectedPartId; void variantId; void view; void docViews
+  const target = getTarget(state, view, mode)
+  void revision; void selectedPartId; void variantId; void docViews
   const derivedOf = target?.derived ? mirrorOf(state.doc.views.count, target.view) : null
   const missing = mode === 'draw' && target && !target.derived && !target.image
   const copyFrom = missing ? nearestImageView(state.doc, target.partId, target.variantId, target.srcView) : null
 
   const createImageForView = (from: number | null) => {
     const s = editorStore.getState()
-    const t = getTarget(s)
+    const t = getTarget(s, viewOf(s), modeOf(s))
     if (!t) return
     const src = from != null ? getPartImage(s.doc, t.partId, t.variantId, from) : undefined
     const size = newImageSize(s.doc, t.partId, t.variantId)
@@ -612,10 +693,10 @@ export default function PixelCanvas() {
 
   const cursor = mode === 'draw'
     ? (tool === 'hand' ? 'grab' : tool === 'move' ? 'move' : 'crosshair')
-    : mode === 'rig' || mode === 'animate' ? 'default' : 'grab'
+    : mode === 'rig' ? (rigTool === 'addBone' ? 'crosshair' : 'default') : mode === 'animate' ? 'default' : 'grab'
 
   return (
-    <div ref={containerRef} className="pixel-canvas">
+    <div ref={containerRef} className={`pixel-canvas ${embedded ? 'pixel-canvas--embedded' : ''}`}>
       <canvas
         ref={canvasRef}
         className="pixel-canvas__surface"
@@ -626,21 +707,24 @@ export default function PixelCanvas() {
         onPointerCancel={onPointerCancel}
         onContextMenu={e => e.preventDefault()}
       />
-      {mode === 'draw' && !target && (
+      {mode === 'draw' && !target && !embedded && (
         <div className="pixel-canvas__banner">No part selected. Add a part to start drawing.</div>
       )}
-      {mode === 'draw' && target?.derived && derivedOf != null && (
+      {mode === 'draw' && target?.derived && derivedOf != null && !embedded && (
         <div className="pixel-canvas__banner">
           View {target.view} ({viewLabel(state.doc.views.count, target.view)}) is mirrored from view {derivedOf}.
           <button onClick={() => editorStore.getState().setUi({ view: derivedOf })}>Edit view {derivedOf}</button>
         </div>
       )}
       {missing && target && (
-        <div className="pixel-canvas__banner">
-          This part has no image for view {target.view}. Drawing creates one, or:
-          <button onClick={() => createImageForView(null)}>Blank image</button>
-          {copyFrom != null && <button onClick={() => createImageForView(copyFrom)}>Copy from view {copyFrom}</button>}
+        <div className={`pixel-canvas__banner ${embedded ? 'pixel-canvas__banner--small' : ''}`}>
+          {embedded ? 'No image yet — draw to create one, or' : `This part has no image for view ${target.view}. Drawing creates one, or:`}
+          <button onClick={() => createImageForView(null)}>Blank</button>
+          {copyFrom != null && <button onClick={() => createImageForView(copyFrom)}>Copy view {copyFrom}</button>}
         </div>
+      )}
+      {mode === 'rig' && rigTool === 'addBone' && !embedded && (
+        <div className="pixel-canvas__banner">Press at the new bone's root and drag to its tip (child of the selected bone). Esc cancels.</div>
       )}
     </div>
   )
@@ -649,5 +733,3 @@ export default function PixelCanvas() {
 function isIdentityLike(m: Mat2D): boolean {
   return m.a === 1 && m.b === 0 && m.c === 0 && m.d === 1 && m.tx === 0 && m.ty === 0
 }
-
-export { ZOOM_MIN, ZOOM_MAX }
