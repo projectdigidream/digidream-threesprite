@@ -88,6 +88,9 @@ export default function Preview3D() {
         </select>
         <button className="icon-btn" title="Play / pause (Space)" disabled={!anim} onClick={() => setUi({ playing: !playing })}><Icon name={playing ? 'pause' : 'play'} /></button>
         <span className="transport__frame">{anim ? `${frame + 1}/${anim.frameCount}` : '–'}</span>
+        {anim && anim.frameCount > 1 && (
+          <input className="preview3d__scrub" type="range" min={0} max={anim.frameCount - 1} step={1} value={frame} title="Scrub frames (pauses playback)" onChange={e => setUi({ frame: Number(e.target.value), playing: false })} />
+        )}
         <label className="preview3d__facing" title="Which way the character faces (turns anticlockwise seen from above)">
           <span>Facing {Math.round(facing * 360)}°</span>
           <input type="range" min={0} max={359} step={1} value={Math.round(facing * 360) % 360} disabled={spread} onChange={e => setUi({ previewFacing: Number(e.target.value) / 360 })} />

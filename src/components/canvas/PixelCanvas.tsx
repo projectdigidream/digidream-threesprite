@@ -122,10 +122,16 @@ export default function PixelCanvas({ view: viewProp, embedded = false }: Props)
   const variantId = useEditor(s => s.ui.variantId)
   const docViews = useEditor(s => s.doc.views)
 
-  const mode: Mode = embedded ? 'draw' : storeMode
+  // In the studio (embedded view canvases and the phone studio's canvas) the
+  // canvas draws like the Draw tab, and while the animation plays it shows
+  // the current frame instead of the rest pose; tapping it pauses.
+  const playing = useEditor(s => s.ui.playing)
+  const studio = embedded || storeMode === 'preview'
+  const mode: Mode = studio ? 'draw' : storeMode
   const view = viewProp ?? storeView
   const viewOf = (s: EditorState) => viewProp ?? s.ui.view
-  const modeOf = (s: EditorState): Mode => (embedded ? 'draw' : s.ui.mode)
+  const modeOf = (s: EditorState): Mode => (embedded || s.ui.mode === 'preview' ? 'draw' : s.ui.mode)
+  const animatingOf = (s: EditorState): boolean => (embedded || s.ui.mode === 'preview') && s.ui.playing
   const zpOf = (s: EditorState) => (embedded ? localZpRef.current : { zoom: s.ui.zoom, pan: s.ui.pan })
   const setZp = (zoom: number, pan: Vec2) => {
     if (embedded) { localZpRef.current = { zoom, pan }; schedule() }
@@ -175,7 +181,7 @@ export default function PixelCanvas({ view: viewProp, embedded = false }: Props)
     ctx.restore()
 
     // compose the frame
-    const showAnim = curMode === 'animate'
+    const showAnim = curMode === 'animate' || animatingOf(s)
     const animId = showAnim ? ui.animId : null
     const frame = showAnim ? ui.frame : 0
     const dim = curMode === 'draw' && ui.ghostOthers && ui.selectedPartId && doc.partOrder.length > 1 ? { except: ui.selectedPartId, alpha: 0.35 } : undefined
@@ -425,6 +431,7 @@ export default function PixelCanvas({ view: viewProp, embedded = false }: Props)
     if (gestureRef.current.kind !== 'idle') return
 
     const s = editorStore.getState()
+    if (animatingOf(s)) { s.setUi({ playing: false }); return } // tap pauses; the next tap draws
     const { ui, doc } = s
     const curMode = modeOf(s)
     const curView = viewOf(s)
@@ -738,7 +745,10 @@ export default function PixelCanvas({ view: viewProp, embedded = false }: Props)
         onPointerCancel={onPointerCancel}
         onContextMenu={e => e.preventDefault()}
       />
-      {mode === 'draw' && !target && !embedded && (
+      {studio && playing && (
+        <div className={`pixel-canvas__banner ${embedded ? 'pixel-canvas__banner--small' : ''}`}>Playing · tap to pause and draw</div>
+      )}
+      {mode === 'draw' && !target && !embedded && !playing && (
         <div className="pixel-canvas__banner">No part selected. Add a part to start drawing.</div>
       )}
       {mode === 'draw' && target?.solids && !embedded && (
