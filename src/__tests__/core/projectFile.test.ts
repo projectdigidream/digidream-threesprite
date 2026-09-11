@@ -22,19 +22,20 @@ describe('project file', () => {
     const bone = p.skeleton.bones[p.skeleton.rootOrder[0]]
     const other = addPart(p, { boneId: bone.id, name: 'hat', width: 4, height: 4 })
     const anim = addAnimation(p, { name: 'walk', frameCount: 3, fps: 12, loop: false })
-    setKey(ensureBoneTrack(anim, bone.id).rotation, 2, 45, 'easeInOut')
+    setKey(ensureBoneTrack(anim, bone.id).rotation, 2, { r: 0, u: 45, f: 0 }, 'easeInOut')
 
     const bytes = encodeProject(p)
     const { project: q, warnings } = decodeProject(bytes)
     expect(warnings).toEqual([])
     expect(validate(q)).toEqual([])
     expect(q.name).toBe('Round trip')
-    expect(q.views).toEqual({ count: 6, mirror: true })
+    expect(q.views).toEqual({ count: 6, mirror: true, elevationDeg: 0 })
     expect(q.parts[partId].variants[vid].images[1].pixels).toEqual(img.pixels)
     expect(q.parts[partId].variants[v2.id].images[3].width).toBe(5)
     expect(Array.from(q.parts[partId].variants[v2.id].images[3].pixels.slice((6 * 5 + 4) * 4))).toEqual([9, 8, 7, 200])
     expect(q.parts[other.id].name).toBe('hat')
-    expect(q.animations[anim.id].boneTracks[bone.id].rotation[0]).toEqual({ frame: 2, value: 45, interp: 'easeInOut' })
+    expect(q.animations[anim.id].boneTracks[bone.id].rotation[0]).toEqual({ frame: 2, value: { r: 0, u: 45, f: 0 }, interp: 'easeInOut' })
+    expect(q.skeleton.bones[bone.id].rest.position).toEqual({ r: 0, u: 0, f: 0 })
     // the JSON must not carry pixel arrays
     expect(bytes.length).toBeLessThan(20000)
   })

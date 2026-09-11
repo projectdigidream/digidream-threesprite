@@ -16,12 +16,8 @@ interface ImageRef { $file: string; width: number; height: number }
 
 export function encodeProject(p: Project): Uint8Array {
   const files: Record<string, Uint8Array> = {}
-  const json = JSON.parse(JSON.stringify(p, (key, value) => {
-    // PartImage → reference; the pixels go into their own PNG entry
-    if (value && typeof value === 'object' && 'pixels' in value && value.pixels instanceof Uint8ClampedArray) {
-      return undefined // handled below by walking the structure
-    }
-    void key
+  const json = JSON.parse(JSON.stringify(p, (_key, value) => {
+    if (value && typeof value === 'object' && 'pixels' in value && value.pixels instanceof Uint8ClampedArray) return undefined
     return value
   })) as Project
   for (const partId of Object.keys(p.parts)) {
@@ -57,10 +53,16 @@ export function decodeProject(bytes: Uint8Array): DecodedProject {
   }
   const jsonBytes = entries['project.json']
   if (!jsonBytes) throw new Error('Not a ThreeSprite project: project.json missing')
-  const raw = JSON.parse(new TextDecoder().decode(jsonBytes)) as Project
-  if (raw.formatVersion !== FORMAT_VERSION) throw new Error(`Unsupported project format version ${raw.formatVersion} (this app reads ${FORMAT_VERSION})`)
+  const parsed = JSON.parse(new TextDecoder().decode(jsonBytes)) as { formatVersion: number }
   const warnings: string[] = []
+  if (parsed.formatVersion === 1) {
+    migrateV1(parsed as unknown as V1Project)
+    warnings.push('Upgraded a version-1 project: bones were converted to the 3D rig; check the rest pose.')
+  }
+  if (parsed.formatVersion !== FORMAT_VERSION) throw new Error(`Unsupported project format version ${parsed.formatVersion} (this app reads ${FORMAT_VERSION})`)
+  const raw = parsed as unknown as Project
   for (const part of Object.values(raw.parts)) {
+    if (part.foreshorten === undefined) part.foreshorten = true
     for (const v of Object.values(part.variants)) {
       const refs = v.images as unknown as Record<string, ImageRef>
       const images: Record<number, PartImage> = {}
@@ -76,9 +78,49 @@ export function decodeProject(bytes: Uint8Array): DecodedProject {
       v.images = images
     }
   }
+  if (raw.views.elevationDeg === undefined) raw.views.elevationDeg = 0
   const problems = validate(raw)
   if (problems.length) warnings.push(...problems.map(p => `Repairing: ${p}`))
   return { project: raw, warnings }
+}
+
+// ── v1 (2D bones) → v2 (3D bones) ────────────────────────────────────────────
+
+interface V1Transform { x: number; y: number; rotation: number; scaleX: number; scaleY: number }
+interface V1Project {
+  formatVersion: number
+  canvas: { size: number }
+  views: { count: number; mirror: boolean; elevationDeg?: number }
+  skeleton: { bones: Record<string, { parentId: string | null; rest: unknown }> }
+  animations: Record<string, { boneTracks: Record<string, { rotation: { value: unknown }[]; translate: { value: unknown }[]; scale: { value: unknown }[] }> }>
+}
+
+function migrateV1(p: V1Project): void {
+  const size = p.canvas.size
+  for (const b of Object.values(p.skeleton.bones)) {
+    const r = b.rest as V1Transform
+    if (typeof r !== 'object' || r === null || 'position' in r) continue
+    const root = b.parentId === null
+    b.rest = root
+      ? { position: { r: -(r.x - size / 2), u: size - r.y, f: 0 }, rotation: { r: 0, u: 0, f: r.rotation - 90 } }
+      : { position: { r: -r.y, u: r.x, f: 0 }, rotation: { r: 0, u: 0, f: r.rotation } }
+  }
+  for (const anim of Object.values(p.animations)) {
+    for (const [bid, t] of Object.entries(anim.boneTracks)) {
+      const root = p.skeleton.bones[bid]?.parentId === null
+      for (const k of t.rotation) if (typeof k.value === 'number') k.value = { r: 0, u: 0, f: k.value }
+      for (const k of t.translate) {
+        const v = k.value as { x: number; y: number }
+        if (v && typeof v.x === 'number') k.value = root ? { r: -v.x, u: -v.y, f: 0 } : { r: -v.y, u: v.x, f: 0 }
+      }
+      for (const k of t.scale) {
+        const v = k.value as { x: number; y: number }
+        if (v && typeof v.x === 'number') k.value = { r: v.y, u: v.x, f: 1 }
+      }
+    }
+  }
+  p.views.elevationDeg = 0
+  p.formatVersion = 2
 }
 
 export function pngFromImage(img: PartImage): Uint8Array {
@@ -95,7 +137,6 @@ export function imageFromPng(bytes: Uint8Array): PartImage {
   const ch = d.channels
   const pal = d.palette
   if (pal && ch === 1) {
-    // indexed colour: fast-png exposes the palette; alpha comes from tRNS if present
     for (let i = 0; i < n; i++) {
       const idx = src[i] >> shift
       const c = pal[idx] ?? [0, 0, 0]

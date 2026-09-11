@@ -2,6 +2,7 @@ import { useEditor } from '../../store/editorStore'
 import PixelCanvas from '../canvas/PixelCanvas'
 import PalettePanel from '../panels/PalettePanel'
 import PartList from '../panels/PartList'
+import SolidsPanel from '../panels/SolidsPanel'
 import ToolPanel from '../panels/ToolPanel'
 import ViewStrip from '../panels/ViewStrip'
 import Preview3D from '../preview/Preview3D'
@@ -20,6 +21,7 @@ export default function DesktopLayout() {
         <main className="desktop__center"><Preview3D /></main>
         <aside className="desktop__right desktop__right--wide">
           <PalettePanel />
+          <SolidsPanel compact />
           <ViewGrid columns={2} />
         </aside>
         <footer className="desktop__bottom" />
@@ -39,6 +41,7 @@ export default function DesktopLayout() {
       <aside className="desktop__right">
         {mode === 'draw' && <PalettePanel />}
         {mode === 'draw' && <PartList />}
+        {mode === 'draw' && <SolidsPanel />}
         <ModePane mode={mode} side />
         {mode === 'rig' && <PartList />}
       </aside>

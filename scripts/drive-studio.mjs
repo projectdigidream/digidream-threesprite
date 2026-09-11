@@ -52,14 +52,14 @@ await page.waitForTimeout(200)
 await shot('rig')
 if (!mobile) {
   // Locate the starter bone's tip exactly through the dev-exposed store, drag it, and check the rest rotation changed.
+  // The starter bone stands upright at the feet point: its tip projects to (size/2, size − length) in every view.
   const info = await page.evaluate(() => {
     const s = window.__editorStore.getState()
     const b = s.doc.skeleton.bones[s.doc.skeleton.rootOrder[0]]
-    return { zoom: s.ui.zoom, pan: s.ui.pan, root: { x: b.rest.x, y: b.rest.y }, len: b.length, rot: b.rest.rotation }
+    return { zoom: s.ui.zoom, pan: s.ui.pan, size: s.doc.canvas.size, len: b.length, rot: { ...b.rest.rotation } }
   })
   const c2 = await page.locator('.pixel-canvas__surface').first().boundingBox()
-  const r = (info.rot * Math.PI) / 180
-  const tip = { x: info.root.x + Math.cos(r) * info.len, y: info.root.y - Math.sin(r) * info.len }
+  const tip = { x: info.size / 2, y: info.size - info.len }
   const sx = c2.x + info.pan.x + tip.x * info.zoom
   const sy = c2.y + info.pan.y + tip.y * info.zoom
   await page.mouse.move(sx, sy)
@@ -67,9 +67,9 @@ if (!mobile) {
   await page.mouse.move(sx + 80, sy + 30, { steps: 6 })
   await page.mouse.up()
   await page.waitForTimeout(150)
-  const after = await page.evaluate(() => { const s = window.__editorStore.getState(); return s.doc.skeleton.bones[s.doc.skeleton.rootOrder[0]].rest.rotation })
-  console.log(`bone rotation ${info.rot} → ${after}`)
-  if (after === info.rot) errors.push('rig drag did not rotate the bone')
+  const after = await page.evaluate(() => { const s = window.__editorStore.getState(); return { ...s.doc.skeleton.bones[s.doc.skeleton.rootOrder[0]].rest.rotation } })
+  console.log(`bone rotation ${JSON.stringify(info.rot)} → ${JSON.stringify(after)}`)
+  if (after.f === info.rot.f) errors.push('rig drag did not roll the bone in the front view')
   await shot('rig-after-rotate')
 }
 
@@ -80,7 +80,7 @@ await shot('animate')
 const cells = page.locator('.timeline__hcell')
 if (await cells.count() >= 4) {
   await cells.nth(3).click()
-  const rot = page.locator('.numfield:has-text("Rotation") input').first()
+  const rot = page.locator('.numfield:has-text("Rot roll") input').first()
   await rot.fill('35')
   await rot.press('Enter')
   await page.waitForTimeout(150)

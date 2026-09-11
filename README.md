@@ -3,7 +3,8 @@
 An editor for animated sprites of characters that live in 3D space and need several rotation views per frame — the classic billboard sprite. Desktop (macOS, Windows, Linux), Android, and a browser build from one codebase.
 
 - **Configurable views**: any number of rotation angles from 1 to 64 (presets 1 / 4 / 6 / 8 / 12 / 16 / 24 / 32), with an optional mirror mode that lets you draw half the circle and derives the rest.
-- **2D cut-out rig**: bones with a rest pose, raster parts attached to bones, one image per view per part, swappable variants. One skeleton and one animation drive every view.
+- **3D rig, 2D art**: bones live in the character's own 3D space (right / up / forward) and are projected into each view, so an arm that sticks out sideways in the front view points at the camera in the side view. Hand-drawn part images hang off their bone's projected frame per view, with automatic foreshortening; one skeleton and one set of keys drive every view. Dragging a bone in any view moves or rotates it in that view's plane.
+- **Solids**: build a character out of 3D primitives (cube, sphere, cylinder, cone, pyramid) attached to bones. They render live into every view from the same description with a shared depth buffer, quantised pixel-art shading and an outline, and they animate with the rig in 3D. Drag a shape in any view to move it in that view's plane; bake to pixels when you want to paint over them.
 - **Pixel editor**: pencil, eraser, fill, colour picker, rectangle select and move, mirror drawing, ghosting of other parts, onion skin, palette. Touch-first on Android with pinch zoom and long-press picking.
 - **Timeline**: per-bone rotation/move/scale keys, per-part visibility and variant keys, linear / ease / step interpolation, scrubbing, drag-to-move keys.
 - **3D studio**: the sprite as a billboard on a ground grid; orbit the camera and the view swaps exactly as a game picks rotations from the camera bearing. "Spread" shows every facing at once. On desktop the studio shows drawing canvases for every view beside the 3D scene; on a phone it stacks 3D over the drawing canvas (portrait) or side by side (landscape).
@@ -13,6 +14,7 @@ An editor for animated sprites of characters that live in 3D space and need seve
 ## Conventions
 
 - Angles are in turns, anticlockwise seen from above. View 1 is the character facing the viewer; view `k` is what a camera sees at relative bearing `(k−1)/N` turns. At a quarter turn the camera stands at the character's left, so the character appears facing screen-left. This matches Doom's rotation convention, so Doom-style exports need no remapping.
+- The character frame is (right, up, forward) in canvas pixels with the origin at the feet. Each view is an orthographic camera (optionally elevated by a project-wide angle): screen-x = −forward·sin(2π·rel) − right·cos(2π·rel), screen-up = up. Bone rotations are Euler degrees (yaw about up, pitch about right, roll about forward); positive yaw turns anticlockwise seen from above and positive roll turns counter-clockwise on screen in the front view.
 - Every frame of every view is rendered on one fixed square canvas with the feet on the bottom row, so engines that draw sprites on a feet-anchored quad get consistent frames.
 - Mirror mode flips the *composed* frame, so asymmetric poses mirror too. A right-hand prop becomes a left-hand prop in mirrored views.
 

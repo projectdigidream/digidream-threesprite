@@ -1,13 +1,15 @@
 /**
- * Bone gizmos on the pixel canvas, and the drags that edit them. Rig mode
- * edits the rest pose; Animate mode writes keys at the current frame.
- * Pure canvas-2D drawing + store mutations; no React.
+ * Bone gizmos on the pixel canvas, and the drags that edit them, in 3D.
+ * Bones are projected into the current view; dragging moves or rotates a
+ * bone in the plane of that view (root drags keep the bone's depth, tip
+ * drags rotate about the axis pointing at the camera). Rig mode edits the
+ * rest pose; Animate mode writes keys at the current frame.
  */
 import { setKey } from '../../domain/animation'
-import { evalPose, partMatrix } from '../../domain/pose'
+import { apply3, applyAffine, axisAngle, eulerFromMatrix, mul3, normalize3, rotationOf3, sub3, transpose3, unprojectPoint, viewAxes, type Mat34, type ViewProj } from '../../domain/math3'
+import { evalPose, projectBone, viewProj } from '../../domain/pose'
 import { ensureBoneTrack } from '../../domain/project'
-import { apply, invert, rotationOf, type Mat2D } from '../../domain/transform'
-import type { Id, Project, Vec2 } from '../../domain/types'
+import type { Animation, Id, Project, Vec2, Vec3 } from '../../domain/types'
 import type { EditorState, UiState } from '../../store/editorStore'
 
 type Pt = { x: number; y: number }
@@ -19,34 +21,54 @@ export interface RigDrag {
   /** Canvas-space grab offset so the handle does not jump. */
   grab: Pt
   /** Latest preview values; applied to the doc on finish. */
-  preview: { x?: number; y?: number; rotation?: number; length?: number; offset?: Vec2 }
+  preview: { position?: Vec3; rotation?: Vec3; length?: number; offset?: Vec2 }
   finish: (s: EditorState) => void
   cancel: (s: EditorState) => void
+  ctx: DragCtx
+}
+
+interface DragCtx {
+  vp: ViewProj
+  anim: Animation | null
+  frame: number
+  world: Mat34
+  parentWorld: Mat34 | null
+  origin: Pt
+  depth: number
+  startAngle: number
+  unitLen: number
+  restAngle: number
 }
 
 const BONE_COLOR = 'rgba(94,200,255,0.95)'
 const BONE_SEL = 'rgba(255,180,84,1)'
 const PIVOT_COLOR = 'rgba(255,120,200,1)'
 
-function bonePose(doc: Project, animId: Id | null, frame: number) {
-  const anim = animId ? doc.animations[animId] ?? null : null
-  return { anim, pose: evalPose(doc.skeleton, anim, frame) }
+function anims(doc: Project, animId: Id | null) {
+  return animId ? doc.animations[animId] ?? null : null
 }
 
-export function drawRigOverlay(ctx: CanvasRenderingContext2D, doc: Project, ui: UiState, animId: Id | null, frame: number, toScreen: (x: number, y: number) => Pt, drag: RigDrag | null): void {
-  const { pose } = bonePose(doc, animId, frame)
-  const previewMats = drag ? previewPose(doc, animId, frame, drag) : pose
+export function drawRigOverlay(ctx: CanvasRenderingContext2D, doc: Project, ui: UiState, animId: Id | null, frame: number, view: number, toScreen: (x: number, y: number) => Pt, drag: RigDrag | null): void {
+  const anim = anims(doc, animId)
+  const pose = drag ? previewPose(doc, anim, frame, drag) : evalPose(doc.skeleton, anim, frame)
+  const vp = viewProj(doc, view)
   ctx.save()
   ctx.lineWidth = 2
-  for (const [id, m] of previewMats) {
+  const projections = new Map<Id, ReturnType<typeof projectBone>>()
+  for (const [id, m] of pose) {
     const bone = doc.skeleton.bones[id]
     if (!bone) continue
-    const a = toScreen(...xy(apply(m, 0, 0)))
-    const b = toScreen(...xy(apply(m, bone.length, 0)))
+    projections.set(id, projectBone(m, bone.length, vp))
+  }
+  // draw far bones first so near ones read on top
+  const order = [...projections.entries()].sort((a, b) => a[1].depth - b[1].depth)
+  for (const [id, pr] of order) {
+    const bone = doc.skeleton.bones[id]
+    const a = toScreen(pr.origin.x, pr.origin.y)
+    const b = toScreen(pr.tip.x, pr.tip.y)
     const sel = id === ui.selectedBoneId
     ctx.strokeStyle = sel ? BONE_SEL : BONE_COLOR
     ctx.fillStyle = ctx.strokeStyle
-    // shaft as a thin triangle
     const ang = Math.atan2(b.y - a.y, b.x - a.x)
     const w = 4
     ctx.beginPath()
@@ -58,22 +80,19 @@ export function drawRigOverlay(ctx: CanvasRenderingContext2D, doc: Project, ui: 
     ctx.fill()
     ctx.globalAlpha = 1
     ctx.stroke()
-    // root circle
     ctx.beginPath(); ctx.arc(a.x, a.y, sel ? 6 : 5, 0, Math.PI * 2); ctx.fillStyle = '#1f2430'; ctx.fill(); ctx.stroke()
-    // tip
     ctx.beginPath(); ctx.arc(b.x, b.y, 3.5, 0, Math.PI * 2); ctx.fillStyle = ctx.strokeStyle; ctx.fill()
-    // name
     ctx.fillStyle = 'rgba(255,255,255,0.85)'
     ctx.font = '11px system-ui, sans-serif'
     ctx.fillText(bone.name, a.x + 8, a.y - 8)
   }
-  // pivot handle of the selected part
-  if (ui.selectedPartId && doc.parts[ui.selectedPartId]) {
-    const part = doc.parts[ui.selectedPartId]
-    const bm = previewMats.get(part.boneId)
-    if (bm) {
+  // pivot handle of the selected pixel part (rest pose only)
+  const part = ui.selectedPartId ? doc.parts[ui.selectedPartId] : null
+  if (part && !part.solids && !anim) {
+    const pr = projections.get(part.boneId)
+    if (pr) {
       const off = drag?.handle === 'pivot' && drag.preview.offset ? drag.preview.offset : part.offset
-      const p = toScreen(...xy(apply(bm, off.x, off.y)))
+      const p = toScreen(...xy(offsetToCanvas(pr, off)))
       ctx.strokeStyle = PIVOT_COLOR
       ctx.lineWidth = 2
       ctx.beginPath(); ctx.moveTo(p.x - 7, p.y); ctx.lineTo(p.x + 7, p.y); ctx.moveTo(p.x, p.y - 7); ctx.lineTo(p.x, p.y + 7); ctx.stroke()
@@ -85,64 +104,74 @@ export function drawRigOverlay(ctx: CanvasRenderingContext2D, doc: Project, ui: 
 
 function xy(p: Pt): [number, number] { return [p.x, p.y] }
 
+/** Canvas point of a part offset in a bone's projected frame. */
+function offsetToCanvas(pr: ReturnType<typeof projectBone>, off: Vec2): Pt {
+  const a = (pr.angle * Math.PI) / 180
+  // rotate(deg) in canvas space: x' = cos·x + sin·y ; y' = −sin·x + cos·y
+  return { x: pr.origin.x + Math.cos(a) * off.x + Math.sin(a) * off.y, y: pr.origin.y - Math.sin(a) * off.x + Math.cos(a) * off.y }
+}
+
 /** World matrices with a drag's preview values applied (without touching the doc). */
-function previewPose(doc: Project, animId: Id | null, frame: number, drag: RigDrag): Map<Id, Mat2D> {
-  const anim = animId ? doc.animations[animId] ?? null : null
-  if (drag.handle === 'pivot' || Object.keys(drag.preview).length === 0) return evalPose(doc.skeleton, anim, frame)
-  // temporarily patch a shallow copy of the skeleton / animation
-  const bone = doc.skeleton.bones[drag.boneId]
+function previewPose(doc: Project, anim: Animation | null, frame: number, drag: RigDrag): Map<Id, Mat34> {
   const p = drag.preview
+  if (drag.handle === 'pivot' || (!p.position && !p.rotation && p.length === undefined)) return evalPose(doc.skeleton, anim, frame)
+  const bone = doc.skeleton.bones[drag.boneId]
   if (!anim) {
-    const patched = { ...doc.skeleton, bones: { ...doc.skeleton.bones, [drag.boneId]: { ...bone, length: p.length ?? bone.length, rest: { ...bone.rest, x: p.x ?? bone.rest.x, y: p.y ?? bone.rest.y, rotation: p.rotation ?? bone.rest.rotation } } } }
+    const patched = { ...doc.skeleton, bones: { ...doc.skeleton.bones, [drag.boneId]: { ...bone, length: p.length ?? bone.length, rest: { position: p.position ?? bone.rest.position, rotation: p.rotation ?? bone.rest.rotation } } } }
     return evalPose(patched, null, frame)
   }
   const track = anim.boneTracks[drag.boneId] ?? { rotation: [], translate: [], scale: [] }
   const rot = track.rotation.map(k => ({ ...k }))
-  const tr = track.translate.map(k => ({ ...k, value: { ...k.value } }))
-  if (p.rotation !== undefined) setKey(rot, frame, p.rotation)
-  if (p.x !== undefined || p.y !== undefined) setKey(tr, frame, { x: p.x ?? 0, y: p.y ?? 0 })
+  const tr = track.translate.map(k => ({ ...k }))
+  if (p.rotation) setKey(rot, frame, p.rotation)
+  if (p.position) setKey(tr, frame, p.position)
   const patchedAnim = { ...anim, boneTracks: { ...anim.boneTracks, [drag.boneId]: { ...track, rotation: rot, translate: tr } } }
   const patchedSkel = p.length !== undefined ? { ...doc.skeleton, bones: { ...doc.skeleton.bones, [drag.boneId]: { ...bone, length: p.length } } } : doc.skeleton
   return evalPose(patchedSkel, patchedAnim, frame)
 }
 
-/** Find a handle under canvas point `c` (radius in canvas pixels). Selected bone's handles win, then pivots, then any root/tip. */
-export function hitRig(doc: Project, ui: UiState, animId: Id | null, frame: number, c: Pt, radius: number): RigDrag | null {
-  const { anim, pose } = bonePose(doc, animId, frame)
+/** Find a handle under canvas point `c` (radius in canvas pixels). Selected bone first, then pivots, then nearest others. */
+export function hitRig(doc: Project, ui: UiState, animId: Id | null, frame: number, view: number, c: Pt, radius: number): RigDrag | null {
+  const anim = anims(doc, animId)
+  const pose = evalPose(doc.skeleton, anim, frame)
+  const vp = viewProj(doc, view)
   const near = (p: Pt) => Math.hypot(p.x - c.x, p.y - c.y) <= radius
 
-  // pivot of the selected part
-  if (ui.selectedPartId && doc.parts[ui.selectedPartId] && !anim) {
-    const part = doc.parts[ui.selectedPartId]
-    const bm = pose.get(part.boneId)
-    if (bm && near(apply(bm, part.offset.x, part.offset.y))) return makePivotDrag(doc, part.id, bm, c)
+  const part = ui.selectedPartId ? doc.parts[ui.selectedPartId] : null
+  if (part && !part.solids && !anim) {
+    const w = pose.get(part.boneId)
+    const bone = doc.skeleton.bones[part.boneId]
+    if (w && bone) {
+      const pr = projectBone(w, bone.length, vp)
+      if (near(offsetToCanvas(pr, part.offset))) return makePivotDrag(doc, part.id, pr, c, vp, anim, frame, w)
+    }
   }
   const order: Id[] = []
   if (ui.selectedBoneId) order.push(ui.selectedBoneId)
   for (const id of pose.keys()) if (id !== ui.selectedBoneId) order.push(id)
-  // tips first (smaller targets), then roots
   for (const handle of ['tip', 'root'] as const) {
     for (const id of order) {
       const bone = doc.skeleton.bones[id]
-      const m = pose.get(id)
-      if (!bone || !m) continue
-      const p = handle === 'root' ? apply(m, 0, 0) : apply(m, bone.length, 0)
-      if (near(p)) return makeBoneDrag(doc, anim, frame, id, handle, m, c)
+      const w = pose.get(id)
+      if (!bone || !w) continue
+      const pr = projectBone(w, bone.length, vp)
+      const p = handle === 'root' ? pr.origin : pr.tip
+      if (near(p)) return makeBoneDrag(doc, anim, frame, id, handle, w, pose, c, vp)
     }
   }
   return null
 }
 
-function makePivotDrag(doc: Project, partId: Id, boneWorld: Mat2D, c: Pt): RigDrag {
+function makePivotDrag(doc: Project, partId: Id, pr: ReturnType<typeof projectBone>, c: Pt, vp: ViewProj, anim: Animation | null, frame: number, world: Mat34): RigDrag {
   const part = doc.parts[partId]
-  const start = apply(boneWorld, part.offset.x, part.offset.y)
-  const inv = invert(boneWorld)!
+  const start = offsetToCanvas(pr, part.offset)
   const drag: RigDrag = {
     boneId: part.boneId,
     handle: 'pivot',
     partId,
     grab: { x: c.x - start.x, y: c.y - start.y },
     preview: {},
+    ctx: { vp, anim, frame, world, parentWorld: null, origin: pr.origin, depth: pr.depth, startAngle: pr.angle, unitLen: 0, restAngle: pr.angle },
     finish(s) {
       const off = drag.preview.offset
       if (!off) return
@@ -150,113 +179,125 @@ function makePivotDrag(doc: Project, partId: Id, boneWorld: Mat2D, c: Pt): RigDr
     },
     cancel() { drag.preview = {} },
   }
-  ;(drag as RigDrag & { inv: Mat2D }).inv = inv
   return drag
 }
 
-function makeBoneDrag(doc: Project, anim: Project['animations'][string] | null, frame: number, boneId: Id, handle: 'root' | 'tip', world: Mat2D, c: Pt): RigDrag {
+function makeBoneDrag(doc: Project, anim: Animation | null, frame: number, boneId: Id, handle: 'root' | 'tip', world: Mat34, pose: Map<Id, Mat34>, c: Pt, vp: ViewProj): RigDrag {
   const bone = doc.skeleton.bones[boneId]
-  const parentWorld = bone.parentId ? evalPose(doc.skeleton, anim, frame).get(bone.parentId)! : null
-  const origin = apply(world, 0, 0)
-  const tip = apply(world, bone.length, 0)
-  const grab = handle === 'root' ? { x: c.x - origin.x, y: c.y - origin.y } : { x: c.x - tip.x, y: c.y - tip.y }
+  const parentWorld = bone.parentId ? pose.get(bone.parentId) ?? null : null
+  const pr = projectBone(world, bone.length, vp)
+  const grab = handle === 'root' ? { x: c.x - pr.origin.x, y: c.y - pr.origin.y } : { x: c.x - pr.tip.x, y: c.y - pr.tip.y }
   const drag: RigDrag = {
     boneId,
     handle,
     grab,
     preview: {},
+    ctx: { vp, anim, frame, world, parentWorld, origin: pr.origin, depth: pr.depth, startAngle: pr.angle, unitLen: bone.length > 0 ? pr.length / bone.length : 0, restAngle: pr.angle },
     finish(s) {
       const p = drag.preview
-      if (Object.keys(p).length === 0) return
+      if (!p.position && !p.rotation && p.length === undefined) return
       if (!anim) {
         s.commit(handle === 'root' ? 'Move bone' : 'Rotate bone', d => {
           const b = d.skeleton.bones[boneId]
           if (!b) return
-          if (p.x !== undefined) b.rest.x = p.x
-          if (p.y !== undefined) b.rest.y = p.y
-          if (p.rotation !== undefined) b.rest.rotation = p.rotation
+          if (p.position) b.rest.position = p.position
+          if (p.rotation) b.rest.rotation = p.rotation
           if (p.length !== undefined) b.length = p.length
         })
       } else {
-        s.commit(handle === 'root' ? 'Key translate' : 'Key rotation', d => {
+        s.commit(handle === 'root' ? 'Key move' : 'Key rotation', d => {
           const a = d.animations[anim.id]
           if (!a) return
           const t = ensureBoneTrack(a, boneId)
-          if (p.rotation !== undefined) setKey(t.rotation, frame, p.rotation)
-          if (p.x !== undefined || p.y !== undefined) setKey(t.translate, frame, { x: p.x ?? 0, y: p.y ?? 0 })
+          if (p.rotation) setKey(t.rotation, frame, p.rotation)
+          if (p.position) setKey(t.translate, frame, p.position)
           if (p.length !== undefined) { const b = d.skeleton.bones[boneId]; if (b) b.length = p.length }
         })
       }
     },
     cancel() { drag.preview = {} },
   }
-  const extra = drag as RigDrag & { parentWorld: Mat2D | null; origin: Pt; anim: typeof anim; frame: number }
-  extra.parentWorld = parentWorld
-  extra.origin = origin
-  extra.anim = anim
-  extra.frame = frame
   return drag
 }
+
+const round1 = (v: number) => Math.round(v * 10) / 10
+const r3 = (v: Vec3): Vec3 => ({ r: round1(v.r), u: round1(v.u), f: round1(v.f) })
+const wrap = (d: number) => { let x = d % 360; if (x > 180) x -= 360; if (x <= -180) x += 360; return x }
 
 /** Update a drag's preview from the pointer (canvas space). Shift on a tip drag changes the length instead. */
 export function rigDragMove(s: EditorState, drag: RigDrag, c: Pt, shift: boolean): void {
   const doc = s.doc
   const bone = doc.skeleton.bones[drag.boneId]
   if (!bone) return
+  const { ctx } = drag
   const target = { x: c.x - drag.grab.x, y: c.y - drag.grab.y }
 
   if (drag.handle === 'pivot') {
-    const inv = (drag as RigDrag & { inv: Mat2D }).inv
-    const local = apply(inv, target.x, target.y)
-    drag.preview = { offset: { x: Math.round(local.x), y: Math.round(local.y) } }
+    // offset in the projected frame: inverse of offsetToCanvas
+    const a = (ctx.startAngle * Math.PI) / 180
+    const dx = target.x - ctx.origin.x, dy = target.y - ctx.origin.y
+    drag.preview = { offset: { x: Math.round(Math.cos(a) * dx - Math.sin(a) * dy), y: Math.round(Math.sin(a) * dx + Math.cos(a) * dy) } }
     return
   }
 
-  const ex = drag as RigDrag & { parentWorld: Mat2D | null; origin: Pt; anim: Project['animations'][string] | null; frame: number }
-  const parentInv = ex.parentWorld ? invert(ex.parentWorld) : null
-  const parentRot = ex.parentWorld ? rotationOf(ex.parentWorld) : 0
+  const parentRotT = ctx.parentWorld ? transpose3(rotationOf3(ctx.parentWorld)) : null
+  const parentT = ctx.parentWorld ? ctx.parentWorld.t : { r: 0, u: 0, f: 0 }
 
   if (drag.handle === 'root') {
-    const local = parentInv ? apply(parentInv, target.x, target.y) : target
-    const x = Math.round(local.x), y = Math.round(local.y)
-    if (!ex.anim) drag.preview = { x, y }
-    else {
-      // key = local − rest
-      const tr = { x: x - bone.rest.x, y: y - bone.rest.y }
-      drag.preview = { x: tr.x, y: tr.y }
-    }
+    const world = unprojectPoint(target.x, target.y, ctx.depth, ctx.vp)
+    const local = parentRotT ? apply3(parentRotT, sub3(world, parentT)) : world
+    if (!ctx.anim) drag.preview = { position: r3(local) }
+    else drag.preview = { position: r3(sub3(local, bone.rest.position)) }
     return
   }
 
-  // tip: rotation (or length with shift) about the bone origin
-  const dx = target.x - ex.origin.x
-  const dy = target.y - ex.origin.y
+  // tip
   if (shift) {
-    drag.preview = { ...drag.preview, length: Math.max(1, Math.round(Math.hypot(dx, dy))) }
+    if (ctx.unitLen > 0.05) drag.preview = { ...drag.preview, length: Math.max(1, Math.round(Math.hypot(target.x - ctx.origin.x, target.y - ctx.origin.y) / ctx.unitLen)) }
     return
   }
-  const worldDeg = (-Math.atan2(dy, dx) * 180) / Math.PI // CCW on screen
-  const local = worldDeg - parentRot
-  if (!ex.anim) drag.preview = { rotation: Math.round(normDeg(local)) }
-  else {
-    // animated value on top of rest, keeping the current scale's contribution ignored (rotation only)
-    const key = normDeg(local - bone.rest.rotation)
-    drag.preview = { rotation: Math.round(key) }
-  }
+  const desired = (-Math.atan2(target.y - ctx.origin.y, target.x - ctx.origin.x) * 180) / Math.PI
+  const delta = desired - ctx.startAngle
+  const axes = viewAxes(ctx.vp)
+  const newWorldRot = mul3(axisAngle(axes.toward, delta), rotationOf3(ctx.world))
+  const localRot = parentRotT ? mul3(parentRotT, newWorldRot) : newWorldRot
+  const e = eulerFromMatrix(localRot)
+  if (!ctx.anim) drag.preview = { rotation: r3({ r: wrap(e.r), u: wrap(e.u), f: wrap(e.f) }) }
+  else drag.preview = { rotation: r3({ r: wrap(e.r - bone.rest.rotation.r), u: wrap(e.u - bone.rest.rotation.u), f: wrap(e.f - bone.rest.rotation.f) }) }
 }
 
-function normDeg(d: number): number {
-  let r = d % 360
-  if (r > 180) r -= 360
-  if (r < -180) r += 360
-  return r
+/**
+ * Rest transform for a new bone drawn from canvas `root` to `tip` in `view`,
+ * as a child of `parentId` (kept in the parent's plane / depth).
+ */
+export function boneFromDrag(doc: Project, parentId: Id | null, root: Pt, tip: Pt, view: number): { position: Vec3; rotation: Vec3; length: number } {
+  const vp = viewProj(doc, view)
+  const pose = evalPose(doc.skeleton, null, 0)
+  const parentWorld = parentId ? pose.get(parentId) ?? null : null
+  const depth = parentWorld ? projectBone(parentWorld, 0, vp).depth : 0
+  const r3d = unprojectPoint(root.x, root.y, depth, vp)
+  const t3d = unprojectPoint(tip.x, tip.y, depth, vp)
+  const dir = sub3(t3d, r3d)
+  const length = Math.max(1, Math.round(Math.hypot(dir.r, dir.u, dir.f)))
+  const angle = (-Math.atan2(tip.y - root.y, tip.x - root.x) * 180) / Math.PI
+  const axes = viewAxes(vp)
+  const worldRot = axisAngle(axes.toward, angle - 90)
+  const parentRotT = parentWorld ? transpose3(rotationOf3(parentWorld)) : null
+  const localRot = parentRotT ? mul3(parentRotT, worldRot) : worldRot
+  const e = eulerFromMatrix(localRot)
+  const local = parentRotT ? apply3(parentRotT, sub3(r3d, parentWorld!.t)) : r3d
+  void normalize3
+  return { position: r3(local), rotation: r3({ r: wrap(e.r), u: wrap(e.u), f: wrap(e.f) }), length }
 }
 
-/** Canvas-space matrix for a part in the current pose (used by the Inspector to show numbers). */
-export function partWorld(doc: Project, animId: Id | null, frame: number, partId: Id): Mat2D | null {
-  const part = doc.parts[partId]
-  if (!part) return null
-  const { pose } = bonePose(doc, animId, frame)
-  const bm = pose.get(part.boneId)
-  return bm ? partMatrix(bm, part) : null
+/** Bone-local displacement for a screen drag of `dx, dy` canvas pixels in `view` (for moving solids). */
+export function screenDeltaToBoneLocal(doc: Project, animId: Id | null, frame: number, boneId: Id, view: number, dx: number, dy: number): Vec3 {
+  const vp = viewProj(doc, view)
+  const axes = viewAxes(vp)
+  const world = { r: axes.right.r * dx - axes.up.r * dy, u: axes.right.u * dx - axes.up.u * dy, f: axes.right.f * dx - axes.up.f * dy }
+  const w = evalPose(doc.skeleton, anims(doc, animId), frame).get(boneId)
+  if (!w) return world
+  return apply3(transpose3(rotationOf3(w)), world)
 }
+
+export { applyAffine }

@@ -3,11 +3,15 @@
  * serialises to JSON directly (pixels aside) and immer can draft it.
  *
  * Coordinate conventions
- * - Canvas space is pixels, y-down, origin top-left. The canvas is square.
- *   The ground is the bottom EDGE of the canvas (y = size); the feet row is
- *   the last pixel row (y = size - 1).
- * - Rotations are degrees, positive = counter-clockwise ON SCREEN.
- * - Views: see `views.ts`. View 1 = character faces the viewer.
+ * - The CHARACTER FRAME is 3D: `r` = the character's right, `u` = up, `f` =
+ *   forward (the way it faces). Units are canvas pixels; the origin is the
+ *   feet point (bottom centre of the canvas). Bones and solids live here.
+ * - Each view k is an orthographic camera at relative bearing (k−1)/N turns,
+ *   anticlockwise seen from above (see `views.ts` / `math3.ts`). View 1 looks
+ *   at the character's front, so its right hand is on screen-left.
+ * - Canvas space is 2D pixels, y-down, origin top-left, square. The ground is
+ *   the bottom EDGE (y = size); the feet row is the last pixel row.
+ * - 2D rotations are degrees, positive = counter-clockwise ON SCREEN.
  */
 
 export type Id = string
@@ -17,6 +21,8 @@ export type RGBA = readonly [number, number, number, number]
 export type Interp = 'linear' | 'step' | 'easeInOut'
 
 export interface Vec2 { x: number; y: number }
+/** A point or vector in the character frame. */
+export interface Vec3 { r: number; u: number; f: number }
 
 export interface Key<T> {
   frame: number
@@ -25,12 +31,10 @@ export interface Key<T> {
   interp: Interp
 }
 
-export interface Transform {
-  x: number
-  y: number
-  rotation: number
-  scaleX: number
-  scaleY: number
+/** 3D rest transform in the parent's frame. Rotation is Euler degrees: `u` = yaw about up, `r` = pitch about right, `f` = roll about forward, composed Ry·Rx·Rz. */
+export interface Transform3 {
+  position: Vec3
+  rotation: Vec3
 }
 
 export interface Bone {
@@ -38,10 +42,10 @@ export interface Bone {
   name: string
   parentId: Id | null
   children: Id[]
-  /** Drawn length of the bone along its local +x axis, pixels. Visual only. */
+  /** Length along the bone's own +u axis, pixels. Children hang off the tip by convention; visual and for drags. */
   length: number
-  /** Rest pose in the parent's space (canvas space for roots). */
-  rest: Transform
+  /** Rest pose in the parent's frame (character frame for roots). A bone with zero rotation points up. */
+  rest: Transform3
 }
 
 export interface Skeleton {
@@ -63,25 +67,68 @@ export interface PartVariant {
   images: Record<number, PartImage>
 }
 
+// ── solids (3D primitives rendered into every view) ──────────────────────────
+
+export type PrimitiveKind = 'cube' | 'sphere' | 'cylinder' | 'cone' | 'pyramid'
+
+export interface Primitive {
+  id: Id
+  name: string
+  kind: PrimitiveKind
+  /** Centre, in the owning bone's frame (pixels). */
+  position: Vec3
+  /** Extents: width (along r), height (along u), depth (along f). */
+  size: Vec3
+  /** Degrees: yaw about up (`u`), pitch about right (`r`), roll about forward (`f`). */
+  rotation: Vec3
+  color: RGBA
+  visible: boolean
+}
+
+export interface SolidsShading {
+  /** Number of shade tones (2–6). */
+  levels: number
+  /** Dark 1-px outline on silhouettes and depth steps. */
+  outline: boolean
+  /** Light fixed to the viewer ('view') or turning with the character ('character'). */
+  lightSpace: 'view' | 'character'
+}
+
+export interface SolidsGroup {
+  primitives: Record<Id, Primitive>
+  order: Id[]
+  shading: SolidsShading
+}
+
 export interface Part {
   id: Id
   name: string
   boneId: Id
-  /** Where the pivot sits, in the bone's space. */
+  /**
+   * Where the image's pivot sits, in the bone's PROJECTED 2D frame of each
+   * view: x along the projected bone, y perpendicular (y-down canvas sense).
+   */
   offset: Vec2
-  /** Extra rotation of the image in bone space, degrees. Lets an image stay upright on a bone that points up. */
+  /** Image rotation relative to the projected bone direction, degrees CCW on screen. */
   rotation: number
   /** The point of the image that lands on `offset`, in image pixels (edge coordinates). */
   pivot: Vec2
+  /** Squash the image along the bone when the bone's projection shortens (points towards the camera). */
+  foreshorten: boolean
   variants: Record<Id, PartVariant>
   variantOrder: Id[]
   defaultVariant: Id
+  /** When present the part is rendered live from these 3D solids, in the bone's frame; its images are ignored. */
+  solids?: SolidsGroup
 }
 
 export interface BoneTrack {
-  rotation: Key<number>[]
-  translate: Key<Vec2>[]
-  scale: Key<Vec2>[]
+  /** Euler deltas added to the rest rotation, degrees. */
+  rotation: Key<Vec3>[]
+  /** Added to the rest position, parent frame. */
+  translate: Key<Vec3>[]
+  /** Multiplied into the bone's local frame (1 = none). */
+  scale: Key<Vec3>[]
 }
 
 export interface PartTrack {
@@ -101,13 +148,14 @@ export interface Animation {
 }
 
 export interface Project {
-  formatVersion: 1
+  formatVersion: 2
   id: Id
   name: string
   /** 4 characters, [A-Z0-9]; the Doom-style export name. */
   spriteName: string
   canvas: { size: number }
-  views: { count: number; mirror: boolean }
+  /** `elevationDeg`: camera pitch above the horizon for every view (0 = level). */
+  views: { count: number; mirror: boolean; elevationDeg: number }
   palette: { colors: RGBA[] }
   skeleton: Skeleton
   parts: Record<Id, Part>
@@ -119,8 +167,11 @@ export interface Project {
   meta: { createdAt: string; modifiedAt: string }
 }
 
-export const FORMAT_VERSION = 1 as const
+export const FORMAT_VERSION = 2 as const
 export const MIN_CANVAS = 8
 export const MAX_CANVAS = 256
 export const MAX_FRAMES = 256
 export const SPRITE_NAME_RE = /^[A-Z0-9]{4}$/
+
+export const ZERO3: Readonly<Vec3> = Object.freeze({ r: 0, u: 0, f: 0 })
+export const ONE3: Readonly<Vec3> = Object.freeze({ r: 1, u: 1, f: 1 })

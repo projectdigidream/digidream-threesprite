@@ -14,14 +14,14 @@ import { fillAt, strokeSegment } from '../../core/tools/brush'
 import { centeredPan, clampZoom, fitZoom, nextZoom, snapZoom, zoomAbout } from '../../core/tools/zoom'
 import { blitCopy, clearRect, cloneImage, createImage, cropImage, TRANSPARENT, type Rect } from '../../domain/image'
 import { addBone, getPartImage } from '../../domain/project'
-import { evalPose } from '../../domain/pose'
-import { apply, invert, rotationOf, type Mat2D } from '../../domain/transform'
-import type { Id, PartImage, Project, Vec2 } from '../../domain/types'
+import { updatePrimitive } from '../../domain/solidsOps'
+import { apply, invert, type Mat2D } from '../../domain/transform'
+import type { Id, PartImage, Project, Vec2, Vec3 } from '../../domain/types'
 import { isDerived, mirrorOf, viewLabel } from '../../domain/views'
 import { isTypingTarget } from '../../hooks/useKeyboardShortcuts'
 import { frameCache } from '../../store/caches'
 import { editorStore, type EditorState, type Mode, useEditor } from '../../store/editorStore'
-import { drawRigOverlay, hitRig, type RigDrag, rigDragMove } from './rigOverlay'
+import { boneFromDrag, drawRigOverlay, hitRig, type RigDrag, rigDragMove, screenDeltaToBoneLocal } from './rigOverlay'
 
 type Pt = { x: number; y: number }
 
@@ -34,6 +34,7 @@ type Gesture =
   | { kind: 'pinch'; a: number; b: number; startDist: number; startZoom: number; startMid: Pt; startPan: Pt }
   | { kind: 'rig'; pointerId: number; drag: RigDrag }
   | { kind: 'addBone'; pointerId: number; root: Pt; tip: Pt }
+  | { kind: 'solid'; pointerId: number; partId: Id; primId: Id; boneId: Id; start: Pt; startPos: Vec3 }
 
 interface Target {
   partId: Id
@@ -41,6 +42,7 @@ interface Target {
   view: number
   srcView: number
   derived: boolean
+  solids: boolean
   image: PartImage | undefined
   m: Mat2D | null
   animId: Id | null
@@ -57,7 +59,7 @@ function getTarget(s: EditorState, view: number, mode: Mode): Target | null {
   const srcView = derived ? mirrorOf(doc.views.count, view) : view
   const animId = mode === 'draw' ? null : ui.animId
   const frame = mode === 'draw' ? 0 : ui.frame
-  return { partId, variantId, view, srcView, derived, image: getPartImage(doc, partId, variantId, srcView), m: partCanvasMatrix(doc, animId, frame, partId), animId, frame }
+  return { partId, variantId, view, srcView, derived, solids: !!part.solids, image: getPartImage(doc, partId, variantId, srcView), m: partCanvasMatrix(doc, animId, frame, partId, srcView), animId, frame }
 }
 
 /** Size for a new image of a part: match its existing images, else the canvas. */
@@ -251,7 +253,7 @@ export default function PixelCanvas({ view: viewProp, embedded = false }: Props)
     }
 
     if (curMode === 'rig' || curMode === 'animate') {
-      drawRigOverlay(ctx, doc, ui, animId, frame, (x, y) => ({ x: px + x * z, y: py + y * z }), gestureRef.current.kind === 'rig' ? gestureRef.current.drag : null)
+      drawRigOverlay(ctx, doc, ui, animId, frame, curView, (x, y) => ({ x: px + x * z, y: py + y * z }), gestureRef.current.kind === 'rig' ? gestureRef.current.drag : null)
       const g = gestureRef.current
       if (g.kind === 'addBone') {
         ctx.save(); ctx.strokeStyle = '#ffb454'; ctx.lineWidth = 2; ctx.setLineDash([6, 4])
@@ -357,19 +359,28 @@ export default function PixelCanvas({ view: viewProp, embedded = false }: Props)
     gestureRef.current = { kind: 'idle' }
     if (commit) {
       const s = editorStore.getState()
-      const len = dist(g.root, g.tip)
-      if (len >= 2) {
+      if (dist(g.root, g.tip) >= 2) {
         const parentId = s.ui.selectedBoneId
-        const pose = evalPose(s.doc.skeleton, null, 0)
-        const parentWorld = parentId ? pose.get(parentId) ?? null : null
-        const inv = parentWorld ? invert(parentWorld) : null
-        const local = inv ? apply(inv, g.root.x, g.root.y) : g.root
-        const worldDeg = (-Math.atan2(g.tip.y - g.root.y, g.tip.x - g.root.x) * 180) / Math.PI
-        const rotation = worldDeg - (parentWorld ? rotationOf(parentWorld) : 0)
+        const rest = boneFromDrag(s.doc, parentId, g.root, g.tip, viewOf(s))
         let id: Id | null = null
-        s.commit('Add bone', d => { id = addBone(d, { parentId, rest: { x: Math.round(local.x), y: Math.round(local.y), rotation: Math.round(rotation) }, length: Math.round(len) }).id })
+        s.commit('Add bone', d => { id = addBone(d, { parentId, rest: { position: rest.position, rotation: rest.rotation }, length: rest.length }).id })
         if (id) s.setUi({ selectedBoneId: id, rigTool: 'select' })
       }
+    }
+    schedule()
+  }
+
+  const endSolidDrag = (commit: boolean) => {
+    const g = gestureRef.current
+    if (g.kind !== 'solid') return
+    gestureRef.current = { kind: 'idle' }
+    const s = editorStore.getState()
+    const final = s.doc.parts[g.partId]?.solids?.primitives[g.primId]?.position
+    if (commit && final && (final.r !== g.startPos.r || final.u !== g.startPos.u || final.f !== g.startPos.f)) {
+      const pos = { ...final }
+      s.endPreview('Move solid', d => updatePrimitive(d, g.partId, g.primId, q => { q.position = pos }))
+    } else {
+      s.endPreview()
     }
     schedule()
   }
@@ -407,6 +418,7 @@ export default function PixelCanvas({ view: viewProp, embedded = false }: Props)
       if (gestureRef.current.kind === 'stroke') endStroke(false)
       if (gestureRef.current.kind === 'move') endMove(false)
       if (gestureRef.current.kind === 'addBone') endAddBone(false)
+      if (gestureRef.current.kind === 'solid') endSolidDrag(false)
       if (gestureRef.current.kind !== 'pinch') startPinch(ids[0], ids[1])
       return
     }
@@ -428,7 +440,7 @@ export default function PixelCanvas({ view: viewProp, embedded = false }: Props)
           schedule()
           return
         }
-        const hit = hitRig(doc, ui, curMode === 'animate' ? ui.animId : null, curMode === 'animate' ? ui.frame : 0, c, (e.pointerType === 'touch' ? 24 : 14) / zoom)
+        const hit = hitRig(doc, ui, curMode === 'animate' ? ui.animId : null, curMode === 'animate' ? ui.frame : 0, curView, c, (e.pointerType === 'touch' ? 24 : 14) / zoom)
         if (hit) {
           if (hit.boneId !== ui.selectedBoneId && hit.handle !== 'pivot') s.setUi({ selectedBoneId: hit.boneId })
           gestureRef.current = { kind: 'rig', pointerId: e.pointerId, drag: hit }
@@ -448,6 +460,17 @@ export default function PixelCanvas({ view: viewProp, embedded = false }: Props)
 
     const t = getTarget(s, curView, curMode)
     if (ui.tool === 'eyedropper') { pickColor(c); return }
+    if (t?.solids) {
+      // solids parts are moved in 3D, in the plane of this view
+      if (ui.tool === 'move' && ui.selectedPrimitiveId) {
+        const part = doc.parts[t.partId]
+        const prim = part.solids?.primitives[ui.selectedPrimitiveId]
+        if (!prim) return
+        s.beginPreview()
+        gestureRef.current = { kind: 'solid', pointerId: e.pointerId, partId: t.partId, primId: prim.id, boneId: part.boneId, start: c, startPos: { ...prim.position } }
+      }
+      return
+    }
     if (!t || !t.m) return
     if (t.derived) return // read-only view; the overlay explains
 
@@ -536,6 +559,12 @@ export default function PixelCanvas({ view: viewProp, embedded = false }: Props)
       schedule()
       return
     }
+    if (g.kind === 'solid') {
+      const d = screenDeltaToBoneLocal(s.doc, modeOf(s) === 'draw' ? null : s.ui.animId, modeOf(s) === 'draw' ? 0 : s.ui.frame, g.boneId, viewOf(s), c.x - g.start.x, c.y - g.start.y)
+      const pos = { r: Math.round(g.startPos.r + d.r), u: Math.round(g.startPos.u + d.u), f: Math.round(g.startPos.f + d.f) }
+      s.preview(doc => updatePrimitive(doc, g.partId, g.primId, q => { q.position = pos }))
+      return
+    }
     const t = getTarget(s, viewOf(s), modeOf(s))
     if (!t) return
     const ip = canvasToImage(t, c)
@@ -587,6 +616,7 @@ export default function PixelCanvas({ view: viewProp, embedded = false }: Props)
     if (g.kind === 'stroke') { endStroke(true); return }
     if (g.kind === 'move') { endMove(true); return }
     if (g.kind === 'addBone') { endAddBone(true); return }
+    if (g.kind === 'solid') { endSolidDrag(true); return }
     if (g.kind === 'rig') {
       const s = editorStore.getState()
       g.drag.finish(s)
@@ -604,6 +634,7 @@ export default function PixelCanvas({ view: viewProp, embedded = false }: Props)
     if (g.kind === 'stroke') endStroke(false)
     else if (g.kind === 'move') endMove(false)
     else if (g.kind === 'addBone') endAddBone(false)
+    else if (g.kind === 'solid') endSolidDrag(false)
     else if (g.kind === 'rig') { g.drag.cancel(editorStore.getState()); gestureRef.current = { kind: 'idle' } }
     else gestureRef.current = { kind: 'idle' }
     if (pointersRef.current.size === 0) ignoreUntilUpRef.current = false
@@ -677,7 +708,7 @@ export default function PixelCanvas({ view: viewProp, embedded = false }: Props)
   const target = getTarget(state, view, mode)
   void revision; void selectedPartId; void variantId; void docViews
   const derivedOf = target?.derived ? mirrorOf(state.doc.views.count, target.view) : null
-  const missing = mode === 'draw' && target && !target.derived && !target.image
+  const missing = mode === 'draw' && target && !target.derived && !target.solids && !target.image
   const copyFrom = missing ? nearestImageView(state.doc, target.partId, target.variantId, target.srcView) : null
 
   const createImageForView = (from: number | null) => {
@@ -709,6 +740,11 @@ export default function PixelCanvas({ view: viewProp, embedded = false }: Props)
       />
       {mode === 'draw' && !target && !embedded && (
         <div className="pixel-canvas__banner">No part selected. Add a part to start drawing.</div>
+      )}
+      {mode === 'draw' && target?.solids && !embedded && (
+        <div className="pixel-canvas__banner">
+          “{state.doc.parts[target.partId]?.name}” is built from 3D solids and renders into every view. Drag a shape with the Move tool, or edit shapes in the Solids panel.
+        </div>
       )}
       {mode === 'draw' && target?.derived && derivedOf != null && !embedded && (
         <div className="pixel-canvas__banner">

@@ -7,7 +7,7 @@ import { clampKeys } from './animation'
 import { newId } from './ids'
 import { createImage } from './image'
 import { DEFAULT_PALETTE } from './palette'
-import { restWorldRotation } from './pose'
+import { restProjectedAngle } from './pose'
 import {
   FORMAT_VERSION,
   MAX_CANVAS,
@@ -21,7 +21,8 @@ import {
   type PartImage,
   type PartVariant,
   type Project,
-  type Transform,
+  type Transform3,
+  type Vec3,
   type ViewIndex,
 } from './types'
 import { authoredViews, clampViewCount } from './views'
@@ -32,6 +33,7 @@ export interface NewProjectOptions {
   canvasSize?: number
   viewCount?: number
   mirror?: boolean
+  elevationDeg?: number
   /** Create the default bone/part/animation (true) or an empty skeleton. */
   starter?: boolean
 }
@@ -55,7 +57,7 @@ export function createProject(opts: NewProjectOptions = {}): Project {
     name: opts.name?.trim() || 'Untitled sprite',
     spriteName: normalizeSpriteName(opts.spriteName ?? 'SPRT'),
     canvas: { size },
-    views: { count: clampViewCount(opts.viewCount ?? 8), mirror: opts.mirror ?? true },
+    views: { count: clampViewCount(opts.viewCount ?? 8), mirror: opts.mirror ?? true, elevationDeg: opts.elevationDeg ?? 0 },
     palette: { colors: DEFAULT_PALETTE.map(c => [c[0], c[1], c[2], c[3]] as const) },
     skeleton: { bones: {}, rootOrder: [] },
     parts: {},
@@ -66,9 +68,9 @@ export function createProject(opts: NewProjectOptions = {}): Project {
     meta: { createdAt: now, modifiedAt: now },
   }
   if (opts.starter !== false) {
-    // One bone standing on the ground line, pointing up; one upright part
+    // One bone standing at the feet point, pointing up; one upright part
     // covering the whole canvas so drawing "just works" before any rigging.
-    const body = addBone(p, { name: 'body', rest: { x: size / 2, y: size, rotation: 90 }, length: Math.round(size * 0.6) })
+    const body = addBone(p, { name: 'body', length: Math.round(size * 0.6) })
     addPart(p, { name: 'body', boneId: body.id, width: size, height: size, pivot: { x: size / 2, y: size } })
     addAnimation(p, { name: 'idle', fps: 8, frameCount: 4, loop: true })
   }
@@ -80,20 +82,24 @@ export function createProject(opts: NewProjectOptions = {}): Project {
 export interface AddBoneOptions {
   name?: string
   parentId?: Id | null
-  rest?: Partial<Transform>
+  rest?: { position?: Partial<Vec3>; rotation?: Partial<Vec3> }
   length?: number
 }
 
 export function addBone(p: Project, opts: AddBoneOptions = {}): Bone {
   const parentId = opts.parentId ?? null
   if (parentId && !p.skeleton.bones[parentId]) throw new Error(`no such bone ${parentId}`)
+  const rest: Transform3 = {
+    position: { r: 0, u: 0, f: 0, ...opts.rest?.position },
+    rotation: { r: 0, u: 0, f: 0, ...opts.rest?.rotation },
+  }
   const bone: Bone = {
     id: newId(),
     name: opts.name?.trim() || uniqueName('bone', Object.values(p.skeleton.bones).map(b => b.name)),
     parentId,
     children: [],
     length: opts.length ?? Math.round(p.canvas.size / 4),
-    rest: { x: 0, y: 0, rotation: 0, scaleX: 1, scaleY: 1, ...opts.rest },
+    rest,
   }
   p.skeleton.bones[bone.id] = bone
   if (parentId) p.skeleton.bones[parentId].children.push(bone.id)
@@ -107,7 +113,6 @@ export function removeBone(p: Project, id: Id): void {
   if (!bone) return
   if (Object.keys(p.skeleton.bones).length <= 1) throw new Error('cannot remove the last bone')
   const parentId = bone.parentId
-  // detach from parent / roots
   if (parentId) {
     const siblings = p.skeleton.bones[parentId].children
     const at = siblings.indexOf(id)
@@ -118,10 +123,8 @@ export function removeBone(p: Project, id: Id): void {
   }
   for (const c of bone.children) p.skeleton.bones[c].parentId = parentId
   delete p.skeleton.bones[id]
-  // parts
   const fallback = parentId ?? p.skeleton.rootOrder[0]
   for (const part of Object.values(p.parts)) if (part.boneId === id) part.boneId = fallback
-  // tracks
   for (const anim of Object.values(p.animations)) delete anim.boneTracks[id]
 }
 
@@ -174,10 +177,11 @@ export interface AddPartOptions {
   height?: number
   pivot?: { x: number; y: number }
   offset?: { x: number; y: number }
-  /** Rotate the image so it is upright in the rest pose (default true). */
+  /** Rotate the image so it is upright in the front view's rest pose (default true). */
   upright?: boolean
   /** Initial image for view 1 (default: a blank image). */
   image?: PartImage
+  foreshorten?: boolean
 }
 
 export function addPart(p: Project, opts: AddPartOptions): Part {
@@ -192,8 +196,9 @@ export function addPart(p: Project, opts: AddPartOptions): Part {
     name: opts.name?.trim() || uniqueName('part', Object.values(p.parts).map(x => x.name)),
     boneId: opts.boneId,
     offset: opts.offset ?? { x: 0, y: 0 },
-    rotation: upright ? -restWorldRotation(p.skeleton, opts.boneId) : 0,
+    rotation: upright ? -restProjectedAngle(p, opts.boneId, 1) : 0,
     pivot: opts.pivot ?? { x: Math.floor(w / 2), y: h },
+    foreshorten: opts.foreshorten ?? true,
     variants: { [variant.id]: variant },
     variantOrder: [variant.id],
     defaultVariant: variant.id,
@@ -302,11 +307,12 @@ export function ensurePartTrack(anim: Animation, partId: Id) {
 
 // ── views ────────────────────────────────────────────────────────────────────
 
-/** Change the view count / mirror mode. Images for views that no longer exist are dropped; returns warnings. */
-export function setViews(p: Project, count: number, mirror: boolean): string[] {
+/** Change the view count / mirror mode / elevation. Images for views that no longer exist are dropped; returns warnings. */
+export function setViews(p: Project, count: number, mirror: boolean, elevationDeg?: number): string[] {
   const warnings: string[] = []
   p.views.count = clampViewCount(count)
   p.views.mirror = mirror
+  if (elevationDeg !== undefined && Number.isFinite(elevationDeg)) p.views.elevationDeg = Math.max(-60, Math.min(60, elevationDeg))
   const keep = new Set(authoredViews(p.views.count, p.views.mirror))
   for (const part of Object.values(p.parts)) {
     for (const v of Object.values(part.variants)) {
@@ -324,6 +330,8 @@ export function setViews(p: Project, count: number, mirror: boolean): string[] {
 
 // ── validation ───────────────────────────────────────────────────────────────
 
+const isVec3 = (v: unknown): v is Vec3 => !!v && typeof v === 'object' && ['r', 'u', 'f'].every(k => Number.isFinite((v as Record<string, unknown>)[k]))
+
 /** Returns a list of problems; empty when the project is consistent. */
 export function validate(p: Project): string[] {
   const errs: string[] = []
@@ -331,6 +339,7 @@ export function validate(p: Project): string[] {
   if (!SPRITE_NAME_RE.test(p.spriteName)) errs.push(`spriteName "${p.spriteName}" must be 4 chars [A-Z0-9]`)
   if (p.canvas.size < MIN_CANVAS || p.canvas.size > MAX_CANVAS) errs.push(`canvas size ${p.canvas.size} out of range`)
   if (p.views.count !== clampViewCount(p.views.count)) errs.push(`views.count ${p.views.count} out of range`)
+  if (!Number.isFinite(p.views.elevationDeg)) errs.push('views.elevationDeg invalid')
 
   const bones = p.skeleton.bones
   const boneIds = new Set(Object.keys(bones))
@@ -340,6 +349,7 @@ export function validate(p: Project): string[] {
     seen.add(id)
     const b = bones[id]
     if (!b) { errs.push(`missing bone ${id}`); return }
+    if (!isVec3(b.rest?.position) || !isVec3(b.rest?.rotation)) errs.push(`bone ${b.name} has an invalid rest pose`)
     for (const c of b.children) {
       if (bones[c]?.parentId !== id) errs.push(`bone ${c} parent mismatch`)
       visit(c, depth + 1)
@@ -358,6 +368,10 @@ export function validate(p: Project): string[] {
     if (!bones[part.boneId]) errs.push(`part ${part.name} is on missing bone ${part.boneId}`)
     if (!part.variants[part.defaultVariant]) errs.push(`part ${part.name} default variant missing`)
     if (part.variantOrder.length !== Object.keys(part.variants).length) errs.push(`part ${part.name} variantOrder mismatch`)
+    if (part.solids) {
+      if (part.solids.order.length !== Object.keys(part.solids.primitives).length) errs.push(`part ${part.name} solids order mismatch`)
+      for (const prim of Object.values(part.solids.primitives)) if (!isVec3(prim.position) || !isVec3(prim.size) || !isVec3(prim.rotation)) errs.push(`solid ${prim.name} has invalid vectors`)
+    }
     for (const v of Object.values(part.variants)) {
       for (const [k, img] of Object.entries(v.images)) {
         const view = Number(k)

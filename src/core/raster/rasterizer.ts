@@ -2,10 +2,15 @@
  * The one compositor. The 2D editor, the 3D preview textures and every
  * exporter call `composeFrame`, so what is on screen is byte-identical to
  * what ships. Nearest-neighbour only; pixel art must never be anti-aliased.
+ *
+ * Per view: the 3D skeleton is evaluated and projected; pixel parts hang off
+ * their bone's projected 2D frame (relative to how it projected at rest),
+ * solids parts render live from the bone's 3D frame.
  */
 import { flipXPixelsInPlace } from '../../domain/image'
-import { evalPose, partMatrix, samplePart } from '../../domain/pose'
-import { invert, type Mat2D } from '../../domain/transform'
+import { evalPose, partMatrix, projectBone, samplePart, viewProj } from '../../domain/pose'
+import { renderSolids } from '../../domain/solids'
+import { IDENTITY, invert, type Mat2D } from '../../domain/transform'
 import type { Id, PartImage, Project, ViewIndex } from '../../domain/types'
 import { isDerived, mirrorOf } from '../../domain/views'
 
@@ -57,7 +62,6 @@ export function blitNearest(dst: Uint8ClampedArray, dw: number, dh: number, src:
   const sp = src.pixels
   if (sw <= 0 || sh <= 0 || alphaMul <= 0) return
 
-  // destination bounding box of the transformed image rectangle
   const cx = [m.tx, m.a * sw + m.tx, m.c * sh + m.tx, m.a * sw + m.c * sh + m.tx]
   const cy = [m.ty, m.b * sw + m.ty, m.d * sh + m.ty, m.b * sw + m.d * sh + m.ty]
   const x0 = Math.max(0, Math.floor(Math.min(cx[0], cx[1], cx[2], cx[3])))
@@ -112,36 +116,54 @@ export function composeFrame(project: Project, animId: Id | null, frame: number,
 
   const derived = isDerived(N, project.views.mirror, view)
   const srcView = derived ? mirrorOf(N, view) : view
+  const vp = viewProj(project, srcView)
   const anim = animId ? project.animations[animId] ?? null : null
   const pose = evalPose(project.skeleton, anim, frame)
+  const rest = anim ? evalPose(project.skeleton, null, 0) : pose
 
   for (const partId of project.partOrder) {
     if (opts.only && !opts.only.has(partId)) continue
     const part = project.parts[partId]
     if (!part) continue
-    const boneWorld = pose.get(part.boneId)
-    if (!boneWorld) continue
+    const bone = project.skeleton.bones[part.boneId]
+    const world = pose.get(part.boneId)
+    const restWorld = rest.get(part.boneId)
+    if (!bone || !world || !restWorld) continue
     const s = samplePart(anim, part, frame)
     if (!s.visible) continue
+    const alpha = opts.dim && opts.dim.except !== partId ? opts.dim.alpha : 1
+    if (part.solids) {
+      const img = renderSolids(part.solids, world, vp)
+      blitNearest(out, size, size, img, IDENTITY, alpha)
+      continue
+    }
     const variantId = part.variants[s.variantId] ? s.variantId : part.defaultVariant
     const key = imageKey(partId, variantId, srcView)
     const img = opts.overrides?.get(key) ?? part.variants[variantId]?.images[srcView]
     if (!img) continue
-    const alpha = opts.dim && opts.dim.except !== partId ? opts.dim.alpha : 1
-    blitNearest(out, size, size, img, snapMatrix(partMatrix(boneWorld, part)), alpha)
+    const rp = projectBone(restWorld, bone.length, vp)
+    const cp = anim ? projectBone(world, bone.length, vp, rp.angle) : rp
+    blitNearest(out, size, size, img, snapMatrix(partMatrix(rp, cp, part)), alpha)
   }
 
   if (derived) flipXPixelsInPlace(out, size, size)
   return out
 }
 
-/** Canvas-space matrix of one part at (anim, frame), already snapped. Used by the editor to map pointer → image pixels. */
-export function partCanvasMatrix(project: Project, animId: Id | null, frame: number, partId: Id): Mat2D | null {
+/** Canvas-space matrix of a pixel part at (anim, frame) in `view`, already snapped. Null for solids parts. */
+export function partCanvasMatrix(project: Project, animId: Id | null, frame: number, partId: Id, view: ViewIndex): Mat2D | null {
   const part = project.parts[partId]
-  if (!part) return null
+  if (!part || part.solids) return null
+  const bone = project.skeleton.bones[part.boneId]
+  if (!bone) return null
   const anim = animId ? project.animations[animId] ?? null : null
-  const pose = evalPose(project.skeleton, anim, frame)
-  const bw = pose.get(part.boneId)
-  if (!bw) return null
-  return snapMatrix(partMatrix(bw, part))
+  const N = project.views.count
+  const srcView = isDerived(N, project.views.mirror, view) ? mirrorOf(N, view) : view
+  const vp = viewProj(project, srcView)
+  const world = evalPose(project.skeleton, anim, frame).get(part.boneId)
+  const restWorld = anim ? evalPose(project.skeleton, null, 0).get(part.boneId) : world
+  if (!world || !restWorld) return null
+  const rp = projectBone(restWorld, bone.length, vp)
+  const cp = anim ? projectBone(world, bone.length, vp, rp.angle) : rp
+  return snapMatrix(partMatrix(rp, cp, part))
 }

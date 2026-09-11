@@ -12,7 +12,7 @@ describe('createProject', () => {
     expect(validate(p)).toEqual([])
     expect(p.spriteName).toBe('HERO')
     expect(p.canvas.size).toBe(48)
-    expect(p.views).toEqual({ count: 6, mirror: true })
+    expect(p.views).toEqual({ count: 6, mirror: true, elevationDeg: 0 })
     expect(p.skeleton.rootOrder).toHaveLength(1)
     expect(p.partOrder).toHaveLength(1)
     expect(p.animationOrder).toHaveLength(1)
@@ -35,7 +35,7 @@ describe('bones', () => {
     const leaf = addBone(p, { name: 'leaf', parentId: mid.id })
     const part = addPart(p, { boneId: mid.id })
     const anim = addAnimation(p)
-    setKey(ensureBoneTrack(anim, mid.id).rotation, 0, 10)
+    setKey(ensureBoneTrack(anim, mid.id).rotation, 0, { r: 0, u: 0, f: 10 })
     removeBone(p, mid.id)
     expect(p.skeleton.bones[mid.id]).toBeUndefined()
     expect(p.skeleton.bones[leaf.id].parentId).toBe(root.id)
@@ -116,7 +116,7 @@ describe('animations', () => {
     const anim = p.animations[p.animationOrder[0]]
     const boneId = p.skeleton.rootOrder[0]
     const t = ensureBoneTrack(anim, boneId)
-    setKey(t.rotation, 0, 0); setKey(t.rotation, 3, 90)
+    setKey(t.rotation, 0, { r: 0, u: 0, f: 0 }); setKey(t.rotation, 3, { r: 0, u: 0, f: 90 })
     setFrameCount(p, anim.id, 2)
     expect(t.rotation).toHaveLength(1)
     expect(validate(p)).toEqual([])

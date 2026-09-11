@@ -11,11 +11,13 @@ export default function ProjectSettingsDialog({ onClose }: { onClose: () => void
   const [views, setViewsN] = useState(doc.views.count)
   const [customViews, setCustomViews] = useState(VIEW_PRESETS.includes(doc.views.count as never) ? '' : String(doc.views.count))
   const [mirror, setMirror] = useState(doc.views.mirror)
+  const [elevation, setElevation] = useState(String(doc.views.elevationDeg))
   const [worldHeight, setWorldHeight] = useState(String(doc.export.worldHeight))
   const [warnings, setWarnings] = useState<string[]>([])
 
   const effViews = customViews ? clampViewCount(Number(customViews)) : views
-  const viewsChanged = effViews !== doc.views.count || mirror !== doc.views.mirror
+  const effElevation = Number.isFinite(Number(elevation)) ? Number(elevation) : doc.views.elevationDeg
+  const viewsChanged = effViews !== doc.views.count || mirror !== doc.views.mirror || effElevation !== doc.views.elevationDeg
 
   const apply = () => {
     let w: string[] = []
@@ -24,7 +26,7 @@ export default function ProjectSettingsDialog({ onClose }: { onClose: () => void
       d.spriteName = normalizeSpriteName(spriteName)
       const h = Number(worldHeight)
       if (Number.isFinite(h) && h > 0) d.export.worldHeight = h
-      if (viewsChanged) w = setViews(d, effViews, mirror)
+      if (viewsChanged) w = setViews(d, effViews, mirror, effElevation)
     })
     if (w.length) setWarnings(w)
     else onClose()
@@ -50,7 +52,8 @@ export default function ProjectSettingsDialog({ onClose }: { onClose: () => void
           <input type="checkbox" checked={mirror} onChange={e => setMirror(e.target.checked)} />
           <span>Mirror symmetry (author {authoredViewCount(effViews, mirror)} of {effViews} views)</span>
         </label>
-        {viewsChanged && <p className="warning">Changing views drops images drawn for views that no longer exist. This is undoable.</p>}
+        <label className="field"><span>Camera elevation (degrees above the horizon, for bones and solids in every view; 0 = level)</span><input inputMode="decimal" value={elevation} onChange={e => setElevation(e.target.value)} /></label>
+        {viewsChanged && <p className="warning">Changing the view count drops images drawn for views that no longer exist. This is undoable.</p>}
         <label className="field"><span>World height (units, written into export manifests)</span><input inputMode="decimal" value={worldHeight} onChange={e => setWorldHeight(e.target.value)} /></label>
         {warnings.length > 0 && (
           <div className="warning">

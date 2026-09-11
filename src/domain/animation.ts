@@ -1,4 +1,4 @@
-import type { Animation, Interp, Key, Vec2 } from './types'
+import type { Animation, Interp, Key, Vec2, Vec3 } from './types'
 
 /** Which frame is showing `seconds` into the animation. Pure, shared by playback and export. */
 export function frameAt(anim: Pick<Animation, 'fps' | 'frameCount' | 'loop'>, seconds: number): number {
@@ -10,6 +10,7 @@ export function frameAt(anim: Pick<Animation, 'fps' | 'frameCount' | 'loop'>, se
 
 export const lerpNumber = (a: number, b: number, u: number): number => a + (b - a) * u
 export const lerpVec2 = (a: Vec2, b: Vec2, u: number): Vec2 => ({ x: lerpNumber(a.x, b.x, u), y: lerpNumber(a.y, b.y, u) })
+export const lerpVec3 = (a: Vec3, b: Vec3, u: number): Vec3 => ({ r: lerpNumber(a.r, b.r, u), u: lerpNumber(a.u, b.u, u), f: lerpNumber(a.f, b.f, u) })
 export const stepOnly = <T,>(a: T): T => a
 export const smoothstep = (u: number): number => u * u * (3 - 2 * u)
 

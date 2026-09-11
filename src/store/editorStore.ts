@@ -32,6 +32,8 @@ export interface UiState {
   selectedPartId: Id | null
   /** Variant of the selected part being edited. */
   variantId: Id | null
+  /** Selected primitive of a solids part. */
+  selectedPrimitiveId: Id | null
   zoom: number
   pan: Vec2
   onion: boolean
@@ -81,6 +83,11 @@ export interface EditorState {
   setUi: (patch: Partial<UiState> | ((ui: UiState) => Partial<UiState>)) => void
   selectPart: (partId: Id | null) => void
   markSaved: () => void
+  /** Live, non-undoable preview of an edit in progress (drags). `endPreview` restores and optionally commits once. */
+  beginPreview: () => void
+  preview: (recipe: (d: Project) => void) => void
+  endPreview: (label?: string, recipe?: (d: Project) => void) => void
+  previewBase: Project | null
 }
 
 export function defaultUi(doc: Project): UiState {
@@ -97,6 +104,7 @@ export function defaultUi(doc: Project): UiState {
     selectedBoneId: doc.skeleton.rootOrder[0] ?? null,
     selectedPartId: partId,
     variantId: partId ? doc.parts[partId].defaultVariant : null,
+    selectedPrimitiveId: null,
     zoom: 8,
     pan: { x: 0, y: 0 },
     onion: false,
@@ -119,6 +127,8 @@ export function reconcileUi(doc: Project, ui: UiState): UiState {
   const part = next.selectedPartId ? doc.parts[next.selectedPartId] : null
   if (!part) next.variantId = null
   else if (!next.variantId || !part.variants[next.variantId]) next.variantId = part.defaultVariant
+  if (!part?.solids) next.selectedPrimitiveId = null
+  else if (!next.selectedPrimitiveId || !part.solids.primitives[next.selectedPrimitiveId]) next.selectedPrimitiveId = part.solids.order[part.solids.order.length - 1] ?? null
   if (!next.selectedBoneId || !doc.skeleton.bones[next.selectedBoneId]) next.selectedBoneId = doc.skeleton.rootOrder[0] ?? null
   if (!next.animId || !doc.animations[next.animId]) next.animId = doc.animationOrder[0] ?? null
   const anim = next.animId ? doc.animations[next.animId] : null
@@ -201,12 +211,28 @@ export const editorStore = createStore<EditorState>()((set, get) => {
     selectPart(partId) {
       set(s => {
         const part = partId ? s.doc.parts[partId] : null
-        return { ui: reconcileUi(s.doc, { ...s.ui, selectedPartId: part ? partId : null, variantId: part ? part.defaultVariant : null, selection: null, selectedBoneId: part ? part.boneId : s.ui.selectedBoneId }) }
+        return { ui: reconcileUi(s.doc, { ...s.ui, selectedPartId: part ? partId : null, variantId: part ? part.defaultVariant : null, selectedPrimitiveId: null, selection: null, selectedBoneId: part ? part.boneId : s.ui.selectedBoneId }) }
       })
     },
 
     markSaved() {
       set({ dirty: false })
+    },
+
+    previewBase: null,
+    beginPreview() {
+      set(s => ({ previewBase: s.previewBase ?? s.doc }))
+    },
+    preview(recipe) {
+      set(s => {
+        const base = s.previewBase ?? s.doc
+        return { previewBase: base, doc: produce(base, recipe), revision: s.revision + 1 }
+      })
+    },
+    endPreview(label, recipe) {
+      const base = get().previewBase
+      if (base) set(s => ({ doc: base, previewBase: null, revision: s.revision + 1 }))
+      if (label && recipe) get().commit(label, recipe)
     },
   }
 })

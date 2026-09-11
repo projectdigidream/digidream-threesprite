@@ -22,8 +22,8 @@ export default function BoneTree() {
     let id: Id | null = null
     commit('Add bone', d => {
       id = addBone(d, parent
-        ? { parentId: parent.id, rest: { x: parent.length, y: 0, rotation: 0 }, length: Math.max(4, Math.round(parent.length * 0.7)) }
-        : { rest: { x: d.canvas.size / 2, y: d.canvas.size, rotation: 90 }, length: Math.round(d.canvas.size / 3) }).id
+        ? { parentId: parent.id, rest: { position: { u: parent.length } }, length: Math.max(4, Math.round(parent.length * 0.7)) }
+        : { length: Math.round(d.canvas.size / 3) }).id
     })
     if (id) setUi({ selectedBoneId: id })
   }

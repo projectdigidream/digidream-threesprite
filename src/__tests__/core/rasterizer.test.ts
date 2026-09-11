@@ -1,10 +1,12 @@
 import { describe, it, expect } from 'vitest'
-import { blitNearest, composeFrame, imageKey, snapMatrix } from '../../core/raster/rasterizer'
+import { blitNearest, composeFrame, imageKey, partCanvasMatrix, snapMatrix } from '../../core/raster/rasterizer'
 import { FrameCache } from '../../core/raster/frameCache'
 import { setKey } from '../../domain/animation'
-import { createImage, flipXPixels } from '../../domain/image'
-import { addAnimation, addBone, addPart, createProject, ensureBoneTrack, ensurePartTrack, setPartImage } from '../../domain/project'
+import { createImage, flipXPixels, opaqueBounds } from '../../domain/image'
+import { addAnimation, addPart, createProject, ensureBoneTrack, ensurePartTrack, setPartImage } from '../../domain/project'
+import { addPrimitive, addSolidsPart } from '../../domain/solidsOps'
 import { compose, rotate, scale, translate, IDENTITY } from '../../domain/transform'
+import { feetBone, pivotFor } from '../fixtures/bones'
 import { ascii, L_ROWS, RED, toAscii } from '../fixtures/pixels'
 
 const canvas = (n: number) => new Uint8ClampedArray(n * n * 4)
@@ -53,23 +55,20 @@ describe('blitNearest goldens', () => {
   it('clips at the canvas edges', () => {
     const dst = canvas(3)
     blitNearest(dst, 3, 3, ascii(L_ROWS), translate(-1, 1))
-    expect(toAscii(dst, 3, 3)).toEqual(['...', '...', '...']) // everything lands off-canvas
+    expect(toAscii(dst, 3, 3)).toEqual(['...', '...', '...'])
     const dst2 = canvas(3)
     blitNearest(dst2, 3, 3, ascii(L_ROWS), translate(-1, 0))
-    expect(toAscii(dst2, 3, 3)).toEqual(['...', '...', 'XX.']) // only the foot survives
+    expect(toAscii(dst2, 3, 3)).toEqual(['...', '...', 'XX.'])
     const dst3 = canvas(3)
     blitNearest(dst3, 3, 3, ascii(L_ROWS), translate(2, 2))
     expect(toAscii(dst3, 3, 3)).toEqual(['...', '...', '..X'])
   })
 
   it('45° rotation is a nearest-neighbour rotation about the pivot', () => {
-    // 2×2 solid image rotated 45° about its centre, placed at (3,3) in a 7×7 canvas.
     const dst = canvas(7)
     const img = ascii(['XX', 'XX'])
     blitNearest(dst, 7, 7, img, snapMatrix(compose(translate(3, 3), rotate(45), translate(-1, -1))))
     const rows = toAscii(dst, 7, 7)
-    // The pivot is snapped to a pixel corner, so the diamond is centred near (3.4, 3):
-    // the two pixels straddling that point are always inside it.
     expect(rows[2][3]).toBe('X')
     expect(rows[3][3]).toBe('X')
     let count = 0
@@ -98,29 +97,29 @@ describe('blitNearest goldens', () => {
   })
 })
 
+/** Two pixel parts on the feet bone, pivots chosen so images land at canvas (0,0) and (1,1) in every view. */
 function twoPartProject() {
   const p = createProject({ canvasSize: S, viewCount: 8, mirror: true, starter: false })
-  const bone = addBone(p, { rest: { x: 0, y: 0, rotation: 0 } })
-  const a = addPart(p, { boneId: bone.id, name: 'a', image: ascii(['XX', 'XX']), pivot: { x: 0, y: 0 }, offset: { x: 0, y: 0 } })
-  const b = addPart(p, { boneId: bone.id, name: 'b', image: ascii(['G']), pivot: { x: 0, y: 0 }, offset: { x: 1, y: 1 } })
+  const bone = feetBone(p)
+  const a = addPart(p, { boneId: bone.id, name: 'a', image: ascii(['XX', 'XX']), pivot: pivotFor(p, 0, 0) })
+  const b = addPart(p, { boneId: bone.id, name: 'b', image: ascii(['G']), pivot: pivotFor(p, 1, 1) })
   return { p, bone, a, b }
 }
 
 describe('composeFrame', () => {
-  it('draws parts in painter order', () => {
+  it('draws parts in painter order, identically in every view for a bone on the vertical axis', () => {
     const { p } = twoPartProject()
-    expect(p.canvas.size).toBe(S)
     expect(toAscii(composeFrame(p, null, 0, 1), S, S)).toEqual(pad(['XX', 'XG']))
+    expect(toAscii(composeFrame(p, null, 0, 3), S, S)).toEqual(pad(['..', '..']))
+    const m = partCanvasMatrix(p, null, 0, p.partOrder[0], 3)!
+    expect([m.a, m.b, m.c, m.d, m.tx, m.ty].map(v => v + 0)).toEqual([1, 0, 0, 1, 0, 0])
   })
 
   it('a hidden part or a missing view image is skipped; derived views are flipped composites', () => {
     const { p, a, b } = twoPartProject()
-    // view 2 only has part a
     setPartImage(p, a.id, a.defaultVariant, 2, ascii(['B.', '..']))
     expect(toAscii(composeFrame(p, null, 0, 2), S, S)).toEqual(pad(['B']))
-    // view 8 is the mirror of view 2
     expect(toAscii(composeFrame(p, null, 0, 8), S, S)).toEqual(pad(['.......B']))
-    // visibility track hides b at frame 1
     const anim = addAnimation(p, { frameCount: 2 })
     const vis = ensurePartTrack(anim, b.id).visible
     setKey(vis, 0, true, 'step')
@@ -132,11 +131,11 @@ describe('composeFrame', () => {
   it('mirror-derived view equals flipX of the authored composite for several N', () => {
     for (const N of [4, 6, 7, 8, 16]) {
       const p = createProject({ canvasSize: S, viewCount: N, mirror: true, starter: false })
-      const bone = addBone(p, { rest: { x: 1, y: 1, rotation: 0 } })
-      const part = addPart(p, { boneId: bone.id, image: ascii(['XG.', '.B.']), pivot: { x: 0, y: 0 } })
+      const bone = feetBone(p)
+      const part = addPart(p, { boneId: bone.id, image: ascii(['XG.', '.B.']), pivot: pivotFor(p, 1, 1) })
       setPartImage(p, part.id, part.defaultVariant, 2, ascii(['X..', 'GB.']))
       const authored = composeFrame(p, null, 0, 2)
-      const derived = composeFrame(p, null, 0, N) // mirrorOf(N, 2) === N for every N ≥ 2
+      const derived = composeFrame(p, null, 0, N)
       expect(toAscii(authored, S, S)[1]).toBe('.X......')
       expect(Array.from(derived)).toEqual(Array.from(flipXPixels(authored, S, S)))
     }
@@ -147,21 +146,40 @@ describe('composeFrame', () => {
     const overrides = new Map([[imageKey(a.id, a.defaultVariant, 1), ascii(['..', '.B'])]])
     expect(toAscii(composeFrame(p, null, 0, 1, { overrides }), S, S)).toEqual(pad(['..', '.G']))
     const dimmed = composeFrame(p, null, 0, 1, { dim: { except: b.id, alpha: 0.5 } })
-    expect(dimmed[3]).toBeGreaterThan(100); expect(dimmed[3]).toBeLessThan(140) // part a ghosted
-    expect(dimmed[(1 * S + 1) * 4 + 3]).toBe(255) // part b full
+    expect(dimmed[3]).toBeGreaterThan(100); expect(dimmed[3]).toBeLessThan(140)
+    expect(dimmed[(1 * S + 1) * 4 + 3]).toBe(255)
   })
 
-  it('animation transforms move the part with snapping', () => {
+  it('animation moves the part with snapping', () => {
     const p = createProject({ canvasSize: S, starter: false })
-    const bone = addBone(p, { rest: { x: 0, y: 0, rotation: 0 } })
-    addPart(p, { boneId: bone.id, image: ascii(['X']), pivot: { x: 0, y: 0 } })
+    const bone = feetBone(p)
+    addPart(p, { boneId: bone.id, image: ascii(['X']), pivot: pivotFor(p, 0, 0) })
     const anim = addAnimation(p, { frameCount: 3 })
     const t = ensureBoneTrack(anim, bone.id)
-    setKey(t.translate, 0, { x: 0, y: 0 })
-    setKey(t.translate, 2, { x: 3, y: 1 })
+    setKey(t.translate, 0, { r: 0, u: 0, f: 0 })
+    setKey(t.translate, 2, { r: -3, u: -1, f: 0 }) // 3 px screen-right, 1 px down
     expect(toAscii(composeFrame(p, anim.id, 0, 1), S, S)).toEqual(pad(['X']))
-    expect(toAscii(composeFrame(p, anim.id, 1, 1), S, S)).toEqual(pad(['..', '..X'])) // (1.5, 0.5) rounds to (2, 1)
+    expect(toAscii(composeFrame(p, anim.id, 1, 1), S, S)).toEqual(pad(['..', '..X']))
     expect(toAscii(composeFrame(p, anim.id, 2, 1), S, S)).toEqual(pad(['..', '...X']))
+  })
+
+  it('renders solids parts live in the bone frame, consistently across views', () => {
+    const p = createProject({ canvasSize: 32, viewCount: 8, mirror: false, starter: false })
+    const root = feetBone(p, 10)
+    const part = addSolidsPart(p, root.id)
+    const prim = addPrimitive(p, part.id, 'cube', RED, 10)
+    prim.position = { r: 8, u: 5, f: 0 }
+    part.solids!.shading.outline = false
+    const front = opaqueBounds(composeFrame(p, null, 0, 1), 32, 32)!
+    expect(front.x + front.w / 2).toBeLessThan(16) // the character's right → screen-left
+    const back = opaqueBounds(composeFrame(p, null, 0, 5), 32, 32)!
+    expect(back.x + back.w / 2).toBeGreaterThan(16)
+    // animating the bone moves the solid with it
+    const anim = addAnimation(p, { frameCount: 2 })
+    setKey(ensureBoneTrack(anim, root.id).rotation, 1, { r: 0, u: 180, f: 0 }) // half turn about up
+    const turned = opaqueBounds(composeFrame(p, anim.id, 1, 1), 32, 32)!
+    expect(turned.x + turned.w / 2).toBeGreaterThan(16)
+    expect(partCanvasMatrix(p, null, 0, part.id, 1)).toBeNull()
   })
 
   it('is deterministic and reuses the out buffer', () => {
@@ -183,8 +201,8 @@ describe('FrameCache', () => {
     const f1 = cache.get(null, 0, 1)
     expect(cache.get(null, 0, 1)).toBe(f1)
     expect(cache.size).toBe(1)
-    p.parts[b.id].offset = { x: 0, y: 0 }
-    expect(cache.get(null, 0, 1)).toBe(f1) // stale until the revision moves
+    p.parts[b.id].pivot = pivotFor(p, 0, 0)
+    expect(cache.get(null, 0, 1)).toBe(f1)
     rev++
     const f2 = cache.get(null, 0, 1)
     expect(toAscii(f2, S, S)).toEqual(pad(['GX', 'XX']))
