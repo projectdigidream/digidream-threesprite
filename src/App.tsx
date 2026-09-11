@@ -1,6 +1,8 @@
 import './App.css'
+import AppShell from './components/layout/AppShell'
 import SmokeTest from './components/dev/SmokeTest'
 
 export default function App() {
-  return <SmokeTest />
+  if (typeof window !== 'undefined' && window.location.search.includes('smoke')) return <SmokeTest />
+  return <AppShell />
 }
