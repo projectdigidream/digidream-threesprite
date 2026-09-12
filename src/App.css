@@ -430,3 +430,5 @@ input[type='text'], input:not([type]), input[inputmode] {
 .modal__message { margin: 0; color: var(--fg-dim); font-size: 13px; }
 button.danger { background: var(--danger); color: #2a0b0b; border-color: transparent; font-weight: 600; }
 .timeline__empty { flex: 1; display: flex; align-items: center; justify-content: center; gap: 12px; padding: 16px; color: var(--fg-dim); }
+.inline-name { flex: 1; min-width: 0; min-height: 32px; padding: 0 8px; }
+.part-list__actions .inline-name { font-weight: 600; }

@@ -1,7 +1,9 @@
+import { useState } from 'react'
 import { addPart, addVariant, movePartOrder, removePart, removeVariant } from '../../domain/project'
 import { askConfirm, askText } from '../../core/ui/dialogs'
 import { editorStore, useEditor } from '../../store/editorStore'
 import { Icon } from '../ui/Icon'
+import { InlineName } from '../ui/InlineName'
 
 export default function PartList() {
   const partOrder = useEditor(s => s.doc.partOrder)
@@ -13,6 +15,7 @@ export default function PartList() {
   const selectPart = useEditor(s => s.selectPart)
   const setUi = useEditor(s => s.setUi)
   const commit = useEditor(s => s.commit)
+  const [focusName, setFocusName] = useState(0)
 
   const selected = selectedPartId ? parts[selectedPartId] : null
 
@@ -21,12 +24,11 @@ export default function PartList() {
     if (!boneId) return
     let newId: string | null = null
     commit('Add part', d => { newId = addPart(d, { boneId }).id })
-    if (newId) selectPart(newId)
+    if (newId) { selectPart(newId); setFocusName(k => k + 1) }
   }
-  const rename = async () => {
+  const rename = (name: string) => {
     if (!selected) return
-    const name = await askText('Rename part', { label: 'Name', defaultValue: selected.name, okLabel: 'Rename' })
-    if (name) commit('Rename part', d => { const p = d.parts[selected.id]; if (p) p.name = name })
+    commit('Rename part', d => { const p = d.parts[selected.id]; if (p) p.name = name })
   }
   const remove = async () => {
     if (!selected) return
@@ -66,8 +68,14 @@ export default function PartList() {
         {rows.map(id => {
           const p = parts[id]
           return (
-            <button key={id} className={`row ${id === selectedPartId ? 'is-selected' : ''}`} onClick={() => selectPart(id)} onDoubleClick={rename}>
-              <span className="row__name">{p.name}</span>
+            <button
+              key={id}
+              className={`row ${id === selectedPartId ? 'is-selected' : ''}`}
+              title="Click to select · double-click to rename"
+              onClick={() => selectPart(id)}
+              onDoubleClick={() => { selectPart(id); setFocusName(k => k + 1) }}
+            >
+              <span className="row__name">{p.name}{p.solids ? ' ⬡' : ''}</span>
               <span className="row__meta">{bones[p.boneId]?.name ?? '?'}</span>
             </button>
           )
@@ -75,18 +83,24 @@ export default function PartList() {
         {rows.length === 0 && <div className="panel__empty">No parts yet.</div>}
       </div>
       {selected && (
-        <div className="part-list__actions">
-          <button className="icon-btn" title="Bring forward" onClick={() => move(1)} disabled={partOrder.indexOf(selected.id) === partOrder.length - 1}><Icon name="up" size={16} /></button>
-          <button className="icon-btn" title="Send backward" onClick={() => move(-1)} disabled={partOrder.indexOf(selected.id) === 0}><Icon name="down" size={16} /></button>
-          <button className="icon-btn" title="Rename" onClick={rename}><Icon name="pencil" size={16} /></button>
-          <button className="icon-btn" title="Delete part" onClick={remove}><Icon name="trash" size={16} /></button>
-          <span className="spacer" />
-          <select className="select" value={variantId ?? ''} onChange={e => setUi({ variantId: e.target.value })} title="Variant (swappable image set)">
-            {selected.variantOrder.map(vid => <option key={vid} value={vid}>{selected.variants[vid].name}</option>)}
-          </select>
-          <button className="icon-btn" title="Add variant" onClick={addVar}><Icon name="plus" size={16} /></button>
-          <button className="icon-btn" title="Delete variant" onClick={removeVar} disabled={selected.variantOrder.length <= 1}><Icon name="close" size={16} /></button>
-        </div>
+        <>
+          <div className="part-list__actions">
+            <InlineName value={selected.name} onCommit={rename} focusKey={focusName} title="Part name (Enter to apply)" />
+            <button className="icon-btn" title="Bring forward" onClick={() => move(1)} disabled={partOrder.indexOf(selected.id) === partOrder.length - 1}><Icon name="up" size={16} /></button>
+            <button className="icon-btn" title="Send backward" onClick={() => move(-1)} disabled={partOrder.indexOf(selected.id) === 0}><Icon name="down" size={16} /></button>
+            <button className="icon-btn" title="Delete part" onClick={remove}><Icon name="trash" size={16} /></button>
+          </div>
+          {!selected.solids && (
+            <div className="part-list__actions">
+              <span className="row__meta">Variant</span>
+              <select className="select" value={variantId ?? ''} onChange={e => setUi({ variantId: e.target.value })} title="Variant (swappable image set)">
+                {selected.variantOrder.map(vid => <option key={vid} value={vid}>{selected.variants[vid].name}</option>)}
+              </select>
+              <button className="icon-btn" title="Add variant" onClick={addVar}><Icon name="plus" size={16} /></button>
+              <button className="icon-btn" title="Delete variant" onClick={removeVar} disabled={selected.variantOrder.length <= 1}><Icon name="close" size={16} /></button>
+            </div>
+          )}
+        </>
       )}
     </div>
   )

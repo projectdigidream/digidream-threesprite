@@ -4,6 +4,7 @@ import { boneOrder, ensureBoneTrack, ensurePartTrack, reparentBone, setPartSkin 
 import type { Animation, Bone, Id, Interp, Part, Vec3 } from '../../domain/types'
 import { useEditor } from '../../store/editorStore'
 import { Icon } from '../ui/Icon'
+import { InlineName } from '../ui/InlineName'
 import { NumField } from '../ui/NumField'
 
 export default function Inspector() {
@@ -61,7 +62,7 @@ function RigInspector() {
       {bone ? (
         <section>
           <h4>Bone</h4>
-          <label className="field"><span>Name</span><input value={bone.name} onChange={e => setBone('Rename bone', b => { b.name = e.target.value })} /></label>
+          <label className="field"><span>Name</span><InlineName value={bone.name} onCommit={name => setBone('Rename bone', b => { b.name = name })} title="Bone name" /></label>
           <label className="field">
             <span>Parent</span>
             <select className="select" value={bone.parentId ?? ''} onChange={e => commit('Reparent bone', d => reparentBone(d, bone.id, e.target.value || null))}>
@@ -81,7 +82,7 @@ function RigInspector() {
       {part && (
         <section>
           <h4>Part</h4>
-          <label className="field"><span>Name</span><input value={part.name} onChange={e => setPart('Rename part', p => { p.name = e.target.value })} /></label>
+          <label className="field"><span>Name</span><InlineName value={part.name} onCommit={name => setPart('Rename part', p => { p.name = name })} title="Part name" /></label>
           <label className="field">
             <span>Bone</span>
             <select className="select" value={part.boneId} onChange={e => setPart('Attach part', p => { p.boneId = e.target.value })}>
