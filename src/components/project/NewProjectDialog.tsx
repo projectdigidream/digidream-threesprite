@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { createProject, normalizeSpriteName } from '../../domain/project'
 import { MAX_CANVAS, MIN_CANVAS } from '../../domain/types'
 import { clampViewCount, MAX_VIEWS, VIEW_PRESETS } from '../../domain/views'
+import { askConfirm } from '../../core/ui/dialogs'
 import { useEditor } from '../../store/editorStore'
 
 const SIZES = [16, 24, 32, 48, 64, 96, 128, 256]
@@ -20,8 +21,8 @@ export default function NewProjectDialog({ onClose }: { onClose: () => void }) {
   const effSize = customSize ? Number(customSize) : size
   const effViews = customViews ? clampViewCount(Number(customViews)) : views
 
-  const create = () => {
-    if (dirty && !window.confirm('Discard unsaved changes in the current project?')) return
+  const create = async () => {
+    if (dirty && !(await askConfirm('Discard unsaved changes in the current project?', { okLabel: 'Discard', danger: true }))) return
     loadProject(createProject({ name, spriteName, canvasSize: effSize, viewCount: effViews, mirror }))
     onClose()
   }

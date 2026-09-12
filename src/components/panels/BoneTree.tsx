@@ -1,5 +1,6 @@
 import { addBone, boneOrder, removeBone } from '../../domain/project'
 import type { Id } from '../../domain/types'
+import { askConfirm, notice } from '../../core/ui/dialogs'
 import { useEditor } from '../../store/editorStore'
 import { Icon } from '../ui/Icon'
 
@@ -27,11 +28,11 @@ export default function BoneTree() {
     })
     if (id) setUi({ selectedBoneId: id })
   }
-  const remove = () => {
+  const remove = async () => {
     if (!selectedBoneId) return
     const b = doc.skeleton.bones[selectedBoneId]
-    if (Object.keys(doc.skeleton.bones).length <= 1) { window.alert('A rig needs at least one bone.'); return }
-    if (!window.confirm(`Delete bone "${b.name}"? Its children and parts move to its parent.`)) return
+    if (Object.keys(doc.skeleton.bones).length <= 1) { await notice('A rig needs at least one bone.'); return }
+    if (!(await askConfirm(`Delete bone “${b.name}”?`, { message: 'Its children and parts move to its parent. This is undoable.', okLabel: 'Delete', danger: true }))) return
     commit('Delete bone', d => removeBone(d, selectedBoneId))
   }
 

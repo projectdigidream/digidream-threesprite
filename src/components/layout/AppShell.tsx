@@ -11,6 +11,7 @@ import HelpDialog from '../project/HelpDialog'
 import NewProjectDialog from '../project/NewProjectDialog'
 import ProjectMenu, { useFileShortcuts } from '../project/ProjectMenu'
 import ProjectSettingsDialog from '../project/ProjectSettingsDialog'
+import DialogHost from '../ui/DialogHost'
 import DesktopLayout from './DesktopLayout'
 import MobileLayout from './MobileLayout'
 import Toolbar from './Toolbar'
@@ -76,6 +77,7 @@ export default function AppShell() {
       {dialog === 'new' && <NewProjectDialog onClose={() => setDialog(null)} />}
       {dialog === 'settings' && <ProjectSettingsDialog onClose={() => setDialog(null)} />}
       {dialog === 'help' && <HelpDialog onClose={() => setDialog(null)} />}
+      <DialogHost />
       {toast && <div className={`toast toast--${toast.kind}`} role="status">{toast.msg}</div>}
     </div>
   )

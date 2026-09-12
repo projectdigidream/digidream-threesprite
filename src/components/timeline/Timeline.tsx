@@ -2,8 +2,19 @@ import { useRef } from 'react'
 import { moveKey, removeKey } from '../../domain/animation'
 import { addAnimation, boneOrder, removeAnimation, setFrameCount } from '../../domain/project'
 import type { Animation, Id, Key } from '../../domain/types'
+import { askConfirm, askText } from '../../core/ui/dialogs'
 import { editorStore, useEditor } from '../../store/editorStore'
 import { Icon } from '../ui/Icon'
+
+/** Ask for a name and create the animation; selects it. Shared by the transport and the empty state. */
+async function promptNewAnimation(): Promise<void> {
+  const s = editorStore.getState()
+  const name = await askText('New animation', { label: 'Name', defaultValue: `anim ${s.doc.animationOrder.length + 1}`, okLabel: 'Add' })
+  if (!name) return
+  let id: Id | null = null
+  editorStore.getState().commit('Add animation', d => { id = addAnimation(d, { name }).id })
+  if (id) editorStore.getState().setUi({ animId: id, frame: 0 })
+}
 
 const CELL = 20
 
@@ -81,10 +92,12 @@ export default function Timeline() {
     setUi({ frame, selectedBoneId: row.kind === 'bone' ? row.id : ui.selectedBoneId, playing: false })
     if (row.kind === 'part') editorStore.getState().selectPart(row.id)
     if (e.pointerType === 'touch') {
-      longPressRef.current = window.setTimeout(() => {
-        if (dragRef.current && dragRef.current.from === dragRef.current.to && anim && window.confirm('Delete keys at this frame?')) {
-          commit('Delete keys', d => { const a = d.animations[anim.id]; if (a) deleteRowKeys(a, row, frame) })
+      longPressRef.current = window.setTimeout(async () => {
+        if (dragRef.current && dragRef.current.from === dragRef.current.to && anim) {
           dragRef.current = null
+          if (await askConfirm('Delete the keys at this frame?', { okLabel: 'Delete', danger: true })) {
+            commit('Delete keys', d => { const a = d.animations[anim.id]; if (a) deleteRowKeys(a, row, frame) })
+          }
         }
       }, 600)
     }
@@ -112,6 +125,12 @@ export default function Timeline() {
   return (
     <div className="timeline">
       <Transport anim={anim} />
+      {!anim && (
+        <div className="timeline__empty">
+          <span>No animations yet.</span>
+          <button className="primary" onClick={() => { promptNewAnimation() }}><Icon name="plus" size={16} /> Add animation</button>
+        </div>
+      )}
       {anim && (
         <div className="timeline__body">
           <div className="timeline__labels">
@@ -170,20 +189,15 @@ function Transport({ anim }: { anim: Animation | null }) {
   const setUi = useEditor(s => s.setUi)
   const commit = useEditor(s => s.commit)
 
-  const add = () => {
-    const name = window.prompt('Animation name', `anim ${doc.animationOrder.length + 1}`)
-    if (!name) return
-    let id: Id | null = null
-    commit('Add animation', d => { id = addAnimation(d, { name }).id })
-    if (id) setUi({ animId: id, frame: 0 })
-  }
-  const rename = () => {
+  const add = () => { promptNewAnimation() }
+  const rename = async () => {
     if (!anim) return
-    const name = window.prompt('Animation name', anim.name)
-    if (name && name.trim()) commit('Rename animation', d => { const a = d.animations[anim.id]; if (a) a.name = name.trim() })
+    const name = await askText('Rename animation', { label: 'Name', defaultValue: anim.name, okLabel: 'Rename' })
+    if (name) commit('Rename animation', d => { const a = d.animations[anim.id]; if (a) a.name = name })
   }
-  const remove = () => {
-    if (!anim || !window.confirm(`Delete animation "${anim.name}"?`)) return
+  const remove = async () => {
+    if (!anim) return
+    if (!(await askConfirm(`Delete animation “${anim.name}”?`, { message: 'Its keys are removed. This is undoable.', okLabel: 'Delete', danger: true }))) return
     commit('Delete animation', d => removeAnimation(d, anim.id))
   }
 

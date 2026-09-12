@@ -2,6 +2,7 @@ import { PRIMITIVE_KINDS } from '../../domain/solids'
 import { addPrimitive, addSolidsPart, convertSolidsToPixels, duplicatePrimitive, movePrimitiveOrder, removePrimitive, updatePrimitive, updateShading } from '../../domain/solidsOps'
 import { rgbaToHex } from '../../domain/palette'
 import type { Id, PrimitiveKind, Vec3 } from '../../domain/types'
+import { askConfirm } from '../../core/ui/dialogs'
 import { useEditor } from '../../store/editorStore'
 import { Icon } from '../ui/Icon'
 import { NumField } from '../ui/NumField'
@@ -63,7 +64,7 @@ export default function SolidsPanel({ compact = false }: { compact?: boolean }) 
       <div className="panel__header">
         <Icon name="cube" size={16} /> Solids · {part.name}
         <span className="spacer" />
-        <button className="text-btn" title="Keep the rendered pixels and drop the 3D shapes so you can paint on them" onClick={() => { if (window.confirm('Bake the solids into pixels? The 3D shapes are removed (undoable).')) commit('Bake solids', d => convertSolidsToPixels(d, part.id)) }}>Bake</button>
+        <button className="text-btn" title="Keep the rendered pixels and drop the 3D shapes so you can paint on them" onClick={async () => { if (await askConfirm('Bake the solids into pixels?', { message: 'The 3D shapes are removed and the rendered views become ordinary images. This is undoable.', okLabel: 'Bake' })) commit('Bake solids', d => convertSolidsToPixels(d, part.id)) }}>Bake</button>
       </div>
       <div className="solids__add">
         {PRIMITIVE_KINDS.map(k => <button key={k} className="chip" onClick={() => add(k)} title={`Add a ${KIND_LABEL[k].toLowerCase()} in the primary colour`}>+ {KIND_LABEL[k]}</button>)}

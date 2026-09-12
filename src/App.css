@@ -421,3 +421,12 @@ input[type='text'], input:not([type]), input[inputmode] {
 .numgrid--3 .numfield__label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .skin__bones { display: flex; flex-wrap: wrap; gap: 4px 12px; }
 .preview3d__scrub { width: 110px; }
+
+/* ── in-app dialogs / timeline empty state ─────────────────────────────────── */
+
+.modal-backdrop--top { z-index: 70; }
+.modal--small { width: min(420px, 100%); gap: 10px; }
+.modal__title { margin: 0; font-size: 16px; }
+.modal__message { margin: 0; color: var(--fg-dim); font-size: 13px; }
+button.danger { background: var(--danger); color: #2a0b0b; border-color: transparent; font-weight: 600; }
+.timeline__empty { flex: 1; display: flex; align-items: center; justify-content: center; gap: 12px; padding: 16px; color: var(--fg-dim); }

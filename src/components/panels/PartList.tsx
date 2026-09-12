@@ -1,4 +1,5 @@
 import { addPart, addVariant, movePartOrder, removePart, removeVariant } from '../../domain/project'
+import { askConfirm, askText } from '../../core/ui/dialogs'
 import { editorStore, useEditor } from '../../store/editorStore'
 import { Icon } from '../ui/Icon'
 
@@ -22,14 +23,14 @@ export default function PartList() {
     commit('Add part', d => { newId = addPart(d, { boneId }).id })
     if (newId) selectPart(newId)
   }
-  const rename = () => {
+  const rename = async () => {
     if (!selected) return
-    const name = window.prompt('Part name', selected.name)
-    if (name && name.trim()) commit('Rename part', d => { const p = d.parts[selected.id]; if (p) p.name = name.trim() })
+    const name = await askText('Rename part', { label: 'Name', defaultValue: selected.name, okLabel: 'Rename' })
+    if (name) commit('Rename part', d => { const p = d.parts[selected.id]; if (p) p.name = name })
   }
-  const remove = () => {
+  const remove = async () => {
     if (!selected) return
-    if (!window.confirm(`Delete part "${selected.name}"?`)) return
+    if (!(await askConfirm(`Delete part “${selected.name}”?`, { message: 'Its images and keys are removed. This is undoable.', okLabel: 'Delete', danger: true }))) return
     commit('Delete part', d => removePart(d, selected.id))
   }
   const move = (dir: 1 | -1) => {
@@ -37,17 +38,17 @@ export default function PartList() {
     const i = partOrder.indexOf(selected.id)
     commit('Reorder parts', d => movePartOrder(d, selected.id, i + dir))
   }
-  const addVar = () => {
+  const addVar = async () => {
     if (!selected) return
-    const name = window.prompt('Variant name (e.g. "open hand")', '')
+    const name = await askText('New variant', { label: 'Name (e.g. “open hand”)', placeholder: 'variant', okLabel: 'Add' })
     if (!name) return
     let vid: string | null = null
     commit('Add variant', d => { vid = addVariant(d, selected.id, name).id })
     if (vid) setUi({ variantId: vid })
   }
-  const removeVar = () => {
+  const removeVar = async () => {
     if (!selected || !variantId || selected.variantOrder.length <= 1) return
-    if (!window.confirm(`Delete variant "${selected.variants[variantId]?.name}"?`)) return
+    if (!(await askConfirm(`Delete variant “${selected.variants[variantId]?.name}”?`, { okLabel: 'Delete', danger: true }))) return
     commit('Delete variant', d => removeVariant(d, selected.id, variantId))
   }
 

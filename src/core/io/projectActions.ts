@@ -5,6 +5,7 @@
 import { addPart } from '../../domain/project'
 import type { Project } from '../../domain/types'
 import { editorStore } from '../../store/editorStore'
+import { askConfirm } from '../ui/dialogs'
 import { getLibrary, type RecentEntry } from './library'
 import { decodeProject, encodeProject, imageFromPng, projectFileName, thumbnail, PROJECT_EXT } from './projectFile'
 import { getSink } from './sink'
@@ -93,7 +94,7 @@ export async function openRecent(entry: RecentEntry): Promise<OpenResult> {
   if (auto && auto.modifiedAt > project.meta.modifiedAt) {
     try {
       const a = decodeProject(auto.bytes)
-      if (window.confirm(`"${project.name}" has unsaved changes from ${new Date(auto.modifiedAt).toLocaleString()}. Restore them?`)) {
+      if (await askConfirm(`Restore unsaved changes to “${project.name}”?`, { message: `An autosave from ${new Date(auto.modifiedAt).toLocaleString()} is newer than the saved file.`, okLabel: 'Restore' })) {
         doc = a.project
         restored = true
       } else {
