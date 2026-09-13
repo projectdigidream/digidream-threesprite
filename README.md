@@ -56,6 +56,18 @@ pnpm tauri android build --apk                       # release (see Signing)
 
 Exports on Android go through the system file picker: choose a zip location (Downloads, Drive, …) and the app writes it there.
 
+### Hosting the web version
+
+`pnpm build:web` writes a plain static site to `dist-web/` (an `index.html` with relative asset URLs), so it runs from a domain root or from any sub-folder; no server code, no headers, no environment variables. Put that folder on any static host:
+
+- **Drag and drop**: [Netlify Drop](https://app.netlify.com/drop) or Cloudflare Pages "direct upload" — drop the `dist-web` folder in the browser and you get a URL.
+- **One command**: `npx surge dist-web` (asks for an email and gives a `*.surge.sh` address), `npx vercel dist-web`, or `npx wrangler pages deploy dist-web`.
+- **GitHub Pages**: push the repo and publish `dist-web` to the `gh-pages` branch (`npx gh-pages -d dist-web`), or let an Actions workflow run `pnpm install && pnpm build:web` and upload `dist-web`. The relative URLs mean the `https://user.github.io/ThreeSprite/` sub-path just works.
+
+Preview locally with `pnpm exec vite preview --config vite.config.web.ts`, or check a sub-path deployment with `node scripts/drive-webhost.mjs <url>`.
+
+What the browser version does and does not do: everything in the editor is the same; projects live in that browser's IndexedDB (use Project → Save as… to get a `.tsprite` file out), and of the exports only Doom-style PNGs and PNG frames are available (as zip downloads); atlas + JSON and GIF need the desktop or Android app.
+
 ### Signing (Android release)
 
 Generate a keystore once with `keytool -genkey -v -keystore release.jks -alias key -keyalg RSA -keysize 2048 -validity 10000`, then create `src-tauri/gen/android/keystore.properties` with `storeFile`, `storePassword`, `keyAlias`, `keyPassword`. Keystores and that properties file are git-ignored.
