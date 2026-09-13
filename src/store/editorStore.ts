@@ -7,6 +7,7 @@ import { applyPatches, enablePatches, produce, produceWithPatches, setAutoFreeze
 import { useStore } from 'zustand'
 import { createStore } from 'zustand/vanilla'
 import type { Rect } from '../domain/image'
+import { activePalette } from '../domain/palette'
 import { createProject } from '../domain/project'
 import type { Id, PartImage, Project, RGBA, Vec2, ViewIndex } from '../domain/types'
 
@@ -92,6 +93,7 @@ export interface EditorState {
 
 export function defaultUi(doc: Project): UiState {
   const partId = doc.partOrder[0] ?? null
+  const colors = activePalette(doc).colors
   return reconcileUi(doc, {
     mode: 'draw',
     tool: 'pencil',
@@ -111,8 +113,8 @@ export function defaultUi(doc: Project): UiState {
     grid: true,
     mirrorDraw: false,
     ghostOthers: true,
-    primary: doc.palette.colors[15] ?? [255, 255, 255, 255],
-    secondary: doc.palette.colors[0] ?? [0, 0, 0, 255],
+    primary: colors[colors.length - 1] ?? [255, 255, 255, 255],
+    secondary: colors[0] ?? [0, 0, 0, 255],
     selection: null,
     spread: false,
     previewFacing: 0,

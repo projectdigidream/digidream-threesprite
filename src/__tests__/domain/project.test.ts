@@ -1,9 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import { setKey } from '../../domain/animation'
 import { createImage } from '../../domain/image'
+import { activePalette, DEFAULT_PALETTE } from '../../domain/palette'
 import {
-  addAnimation, addBone, addPart, addVariant, boneOrder, createProject, ensureBoneTrack, ensurePartTrack,
-  normalizeSpriteName, removeBone, removePart, removeVariant, reparentBone, setFrameCount, setPartImage, setViews, validate,
+  addAnimation, addBone, addPalette, addPart, addVariant, boneOrder, createProject, duplicatePalette, ensureBoneTrack, ensurePartTrack,
+  normalizeSpriteName, removeBone, removePalette, removePart, removeVariant, renamePalette, reparentBone, repairPalettes, setActivePalette,
+  setFrameCount, setPartImage, setViews, validate,
 } from '../../domain/project'
 
 describe('createProject', () => {
@@ -120,5 +122,76 @@ describe('animations', () => {
     setFrameCount(p, anim.id, 2)
     expect(t.rotation).toHaveLength(1)
     expect(validate(p)).toEqual([])
+  })
+})
+
+describe('palettes', () => {
+  it('new projects start with the default preset as the active palette', () => {
+    const p = createProject()
+    expect(p.paletteOrder).toHaveLength(1)
+    expect(activePalette(p).name).toBe('DawnBringer 16')
+    expect(activePalette(p).colors).toEqual(DEFAULT_PALETTE)
+    expect(activePalette(p).colors).not.toBe(DEFAULT_PALETTE)
+    expect(validate(p)).toEqual([])
+  })
+
+  it('add / activate / duplicate / rename / remove keep the list consistent', () => {
+    const p = createProject()
+    const first = p.activePaletteId
+    const a = addPalette(p, 'DawnBringer 16', [[0, 0, 0, 255]])
+    expect(a.name).toBe('DawnBringer 16 2')
+    expect(p.paletteOrder).toEqual([first, a.id])
+    expect(p.activePaletteId).toBe(first)
+    expect(setActivePalette(p, a.id)).toBe(true)
+    expect(setActivePalette(p, 'nope')).toBe(false)
+    expect(p.activePaletteId).toBe(a.id)
+
+    const d = duplicatePalette(p, a.id)!
+    expect(d.name).toBe('DawnBringer 16 2 copy')
+    expect(d.colors).toEqual(a.colors)
+    expect(d.colors).not.toBe(a.colors)
+    expect(p.paletteOrder).toEqual([first, a.id, d.id])
+    expect(duplicatePalette(p, 'nope')).toBeNull()
+
+    renamePalette(p, d.id, '  Skin  ')
+    expect(d.name).toBe('Skin')
+    renamePalette(p, d.id, 'DawnBringer 16')
+    expect(d.name).toBe('DawnBringer 16 3')
+    renamePalette(p, d.id, '   ')
+    expect(d.name).toBe('DawnBringer 16 3')
+
+    expect(removePalette(p, a.id)).toBe(true)
+    expect(p.activePaletteId).toBe(d.id)
+    expect(removePalette(p, d.id)).toBe(true)
+    expect(p.activePaletteId).toBe(first)
+    expect(removePalette(p, first)).toBe(false)
+    expect(p.paletteOrder).toEqual([first])
+    expect(validate(p)).toEqual([])
+  })
+
+  it('validate reports broken palette state and repairPalettes fixes it', () => {
+    const p = createProject()
+    p.activePaletteId = 'missing'
+    expect(validate(p)).toContain('activePaletteId missing is not a palette')
+    repairPalettes(p)
+    expect(validate(p)).toEqual([])
+    expect(p.activePaletteId).toBe(p.paletteOrder[0])
+
+    const q = createProject()
+    q.palettes = {}
+    q.paletteOrder = []
+    expect(validate(q)).toContain('project has no palette')
+    repairPalettes(q)
+    expect(validate(q)).toEqual([])
+    expect(activePalette(q).colors).toEqual(DEFAULT_PALETTE)
+
+    const r = createProject()
+    ;(activePalette(r).colors as unknown[]).push([1, 2, 3], 'red')
+    r.paletteOrder.push('ghost')
+    expect(validate(r).some(e => /invalid colour/.test(e))).toBe(true)
+    expect(validate(r).some(e => /permutation/.test(e))).toBe(true)
+    repairPalettes(r)
+    expect(validate(r)).toEqual([])
+    expect(activePalette(r).colors).toHaveLength(16)
   })
 })

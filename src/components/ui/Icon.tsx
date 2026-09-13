@@ -34,6 +34,11 @@ const PATHS: Record<string, string> = {
   new: 'M6 2h9l5 5v15H6z M15 2v5h5 M12 11v6 M9 14h6',
   save: 'M4 4h13l3 3v13H4z M8 4v5h7V4 M8 20v-6h8v6',
   folder: 'M3 6h6l2 2h10v12H3z',
+  palette: 'M12 3a9 9 0 100 18c1.3 0 2-.8 2-1.8 0-.5-.2-.9-.5-1.3-.3-.4-.5-.8-.5-1.3 0-1 .8-1.8 1.8-1.8H17a4 4 0 004-4c0-4.4-4-8-9-8z M7.5 11a1 1 0 100 2 1 1 0 000-2z M10.5 7a1 1 0 100 2 1 1 0 000-2z M15 7.5a1 1 0 100 2 1 1 0 000-2z',
+  sort: 'M4 6h16 M4 12h10 M4 18h5',
+  left: 'M19 12H5 M11 6l-6 6 6 6',
+  right: 'M5 12h14 M13 6l6 6-6 6',
+  import: 'M12 3v12 M8 11l4 4 4-4 M4 17v3h16v-3',
 }
 
 interface Props { name: keyof typeof PATHS | string; size?: number; className?: string }

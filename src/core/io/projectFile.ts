@@ -6,8 +6,9 @@
  */
 import { decode as decodePng, encode as encodePng } from 'fast-png'
 import { unzipSync, zipSync } from 'fflate'
-import { validate } from '../../domain/project'
-import { FORMAT_VERSION, type PartImage, type Project } from '../../domain/types'
+import { createPalette, DEFAULT_PALETTE, presetNameFor } from '../../domain/palette'
+import { repairPalettes, validate } from '../../domain/project'
+import { FORMAT_VERSION, type PartImage, type Project, type RGBA } from '../../domain/types'
 import { composeFrame } from '../raster/rasterizer'
 
 export const PROJECT_EXT = 'tsprite'
@@ -59,6 +60,7 @@ export function decodeProject(bytes: Uint8Array): DecodedProject {
     migrateV1(parsed as unknown as V1Project)
     warnings.push('Upgraded a version-1 project: bones were converted to the 3D rig; check the rest pose.')
   }
+  if (parsed.formatVersion === 2) migrateV2(parsed as unknown as V2Project)
   if (parsed.formatVersion !== FORMAT_VERSION) throw new Error(`Unsupported project format version ${parsed.formatVersion} (this app reads ${FORMAT_VERSION})`)
   const raw = parsed as unknown as Project
   for (const part of Object.values(raw.parts)) {
@@ -81,7 +83,29 @@ export function decodeProject(bytes: Uint8Array): DecodedProject {
   if (raw.views.elevationDeg === undefined) raw.views.elevationDeg = 0
   const problems = validate(raw)
   if (problems.length) warnings.push(...problems.map(p => `Repairing: ${p}`))
+  repairPalettes(raw)
   return { project: raw, warnings }
+}
+
+// ── v2 (one anonymous palette) → v3 (named palettes, one active) ─────────────
+
+interface V2Project {
+  formatVersion: number
+  palette?: { colors?: unknown }
+  palettes?: unknown
+  paletteOrder?: unknown
+  activePaletteId?: unknown
+}
+
+function migrateV2(p: V2Project): void {
+  const raw = Array.isArray(p.palette?.colors) ? (p.palette!.colors as unknown[]) : DEFAULT_PALETTE
+  const colors = raw.filter((c): c is RGBA => Array.isArray(c) && c.length === 4 && c.every(v => Number.isInteger(v) && v >= 0 && v <= 255))
+  const pal = createPalette(presetNameFor(colors) ?? 'Palette', colors)
+  p.palettes = { [pal.id]: pal }
+  p.paletteOrder = [pal.id]
+  p.activePaletteId = pal.id
+  delete p.palette
+  p.formatVersion = 3
 }
 
 // ── v1 (2D bones) → v2 (3D bones) ────────────────────────────────────────────

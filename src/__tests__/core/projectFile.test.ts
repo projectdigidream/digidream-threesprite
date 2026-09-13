@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest'
+import { unzipSync, zipSync } from 'fflate'
 import { decodeProject, encodeProject, imageFromPng, pngFromImage } from '../../core/io/projectFile'
 import { createImage, setPixel } from '../../domain/image'
-import { addAnimation, addPart, addVariant, createProject, setPartImage, validate } from '../../domain/project'
+import { DEFAULT_PALETTE } from '../../domain/palette'
+import { addAnimation, addPalette, addPart, addVariant, createProject, setActivePalette, setPartImage, validate } from '../../domain/project'
 import { setKey } from '../../domain/animation'
 import { ensureBoneTrack } from '../../domain/project'
 
@@ -38,6 +40,44 @@ describe('project file', () => {
     expect(q.skeleton.bones[bone.id].rest.position).toEqual({ r: 0, u: 0, f: 0 })
     // the JSON must not carry pixel arrays
     expect(bytes.length).toBeLessThan(20000)
+  })
+
+  it('round-trips several palettes and which one is active', () => {
+    const p = createProject({ canvasSize: 8 })
+    const extra = addPalette(p, 'Skin', [[10, 20, 30, 255], [40, 50, 60, 255]])
+    setActivePalette(p, extra.id)
+    const { project: q, warnings } = decodeProject(encodeProject(p))
+    expect(warnings).toEqual([])
+    expect(q.paletteOrder).toEqual(p.paletteOrder)
+    expect(q.activePaletteId).toBe(extra.id)
+    expect(q.palettes[extra.id]).toEqual({ id: extra.id, name: 'Skin', colors: [[10, 20, 30, 255], [40, 50, 60, 255]] })
+  })
+
+  it('upgrades a version-2 project: its single palette becomes the active named palette', () => {
+    const asV2 = (colors: unknown) => {
+      const entries = unzipSync(encodeProject(createProject({ name: 'Old', canvasSize: 8 })))
+      const json = JSON.parse(new TextDecoder().decode(entries['project.json'])) as Record<string, unknown>
+      delete json.palettes; delete json.paletteOrder; delete json.activePaletteId
+      json.formatVersion = 2
+      json.palette = { colors }
+      entries['project.json'] = new TextEncoder().encode(JSON.stringify(json))
+      return zipSync(entries)
+    }
+    const { project: q, warnings } = decodeProject(asV2([[1, 2, 3, 255], [4, 5, 6, 255], 'junk']))
+    expect(warnings).toEqual([])
+    expect(validate(q)).toEqual([])
+    expect(q.formatVersion).toBe(3)
+    expect(q.paletteOrder).toHaveLength(1)
+    expect(q.palettes[q.activePaletteId]).toMatchObject({ name: 'Palette', colors: [[1, 2, 3, 255], [4, 5, 6, 255]] })
+    expect((q as unknown as Record<string, unknown>).palette).toBeUndefined()
+
+    const { project: r } = decodeProject(asV2(DEFAULT_PALETTE))
+    expect(r.palettes[r.activePaletteId].name).toBe('DawnBringer 16')
+
+    const { project: s } = decodeProject(asV2(undefined))
+    expect(validate(s)).toEqual([])
+    expect(r.palettes[r.activePaletteId].colors).toEqual(DEFAULT_PALETTE)
+    expect(s.palettes[s.activePaletteId].colors).toEqual(DEFAULT_PALETTE)
   })
 
   it('rejects non-projects and reports missing images', () => {

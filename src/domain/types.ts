@@ -163,8 +163,15 @@ export interface Animation {
   partTracks: Record<Id, PartTrack>
 }
 
+/** A named list of colours. Pixels store RGBA directly; palettes are a drawing aid. */
+export interface Palette {
+  id: Id
+  name: string
+  colors: RGBA[]
+}
+
 export interface Project {
-  formatVersion: 2
+  formatVersion: 3
   id: Id
   name: string
   /** 4 characters, [A-Z0-9]; the Doom-style export name. */
@@ -172,7 +179,10 @@ export interface Project {
   canvas: { size: number }
   /** `elevationDeg`: camera pitch above the horizon for every view (0 = level). */
   views: { count: number; mirror: boolean; elevationDeg: number }
-  palette: { colors: RGBA[] }
+  palettes: Record<Id, Palette>
+  paletteOrder: Id[]
+  /** The palette shown in the Draw tab. Always one of `palettes`. */
+  activePaletteId: Id
   skeleton: Skeleton
   parts: Record<Id, Part>
   /** Painter's order: first drawn first (bottom). */
@@ -183,7 +193,7 @@ export interface Project {
   meta: { createdAt: string; modifiedAt: string }
 }
 
-export const FORMAT_VERSION = 2 as const
+export const FORMAT_VERSION = 3 as const
 export const MIN_CANVAS = 8
 export const MAX_CANVAS = 256
 export const MAX_FRAMES = 256

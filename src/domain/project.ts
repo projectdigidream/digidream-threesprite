@@ -6,7 +6,7 @@
 import { clampKeys } from './animation'
 import { newId } from './ids'
 import { createImage } from './image'
-import { DEFAULT_PALETTE } from './palette'
+import { createPalette, DEFAULT_PALETTE, MAX_PALETTE, PRESET_PALETTES, uniquePaletteName } from './palette'
 import { restProjectedAngle } from './pose'
 import {
   FORMAT_VERSION,
@@ -17,10 +17,12 @@ import {
   type Animation,
   type Bone,
   type Id,
+  type Palette,
   type Part,
   type PartImage,
   type PartVariant,
   type Project,
+  type RGBA,
   type Transform3,
   type Vec3,
   type ViewIndex,
@@ -51,6 +53,7 @@ export function normalizeSpriteName(s: string): string {
 export function createProject(opts: NewProjectOptions = {}): Project {
   const size = clampCanvasSize(opts.canvasSize ?? 64)
   const now = new Date().toISOString()
+  const palette = createPalette(PRESET_PALETTES[0].name, DEFAULT_PALETTE)
   const p: Project = {
     formatVersion: FORMAT_VERSION,
     id: newId(),
@@ -58,7 +61,9 @@ export function createProject(opts: NewProjectOptions = {}): Project {
     spriteName: normalizeSpriteName(opts.spriteName ?? 'SPRT'),
     canvas: { size },
     views: { count: clampViewCount(opts.viewCount ?? 8), mirror: opts.mirror ?? true, elevationDeg: opts.elevationDeg ?? 0 },
-    palette: { colors: DEFAULT_PALETTE.map(c => [c[0], c[1], c[2], c[3]] as const) },
+    palettes: { [palette.id]: palette },
+    paletteOrder: [palette.id],
+    activePaletteId: palette.id,
     skeleton: { bones: {}, rootOrder: [] },
     parts: {},
     partOrder: [],
@@ -425,7 +430,84 @@ export function validate(p: Project): string[] {
       checkKeys(`part ${pid} variant`, t.variant)
     }
   }
+
+  const palIds = Object.keys(p.palettes ?? {})
+  if (palIds.length === 0) errs.push('project has no palette')
+  if (!Array.isArray(p.paletteOrder) || palIds.length !== p.paletteOrder.length || palIds.some(id => !p.paletteOrder.includes(id))) errs.push('paletteOrder is not a permutation of palettes')
+  if (!p.palettes?.[p.activePaletteId]) errs.push(`activePaletteId ${p.activePaletteId} is not a palette`)
+  for (const pal of Object.values(p.palettes ?? {})) {
+    if (!Array.isArray(pal.colors)) { errs.push(`palette ${pal.name} has no colour list`); continue }
+    if (pal.colors.length > MAX_PALETTE) errs.push(`palette ${pal.name} has more than ${MAX_PALETTE} colours`)
+    if (pal.colors.some(c => !isColor(c))) errs.push(`palette ${pal.name} has an invalid colour`)
+  }
   return errs
+}
+
+const isColor = (c: unknown): c is RGBA => Array.isArray(c) && c.length === 4 && c.every(v => Number.isInteger(v) && v >= 0 && v <= 255)
+
+/**
+ * Make the palette list usable no matter what a file contained: drop broken
+ * entries, keep at least one palette, and point `activePaletteId` at a real one.
+ */
+export function repairPalettes(p: Project): void {
+  const raw = (p.palettes && typeof p.palettes === 'object' ? p.palettes : {}) as Record<Id, Partial<Palette>>
+  const palettes: Record<Id, Palette> = {}
+  for (const [id, pal] of Object.entries(raw)) {
+    if (!pal || typeof pal !== 'object') continue
+    const colors = Array.isArray(pal.colors) ? pal.colors.filter(isColor).slice(0, MAX_PALETTE).map(c => [c[0], c[1], c[2], c[3]] as const) : []
+    palettes[id] = { id, name: typeof pal.name === 'string' && pal.name.trim() ? pal.name : 'Palette', colors }
+  }
+  const order = (Array.isArray(p.paletteOrder) ? p.paletteOrder : []).filter((id, i, a) => palettes[id] && a.indexOf(id) === i)
+  for (const id of Object.keys(palettes)) if (!order.includes(id)) order.push(id)
+  if (order.length === 0) {
+    const pal = createPalette(PRESET_PALETTES[0].name, DEFAULT_PALETTE)
+    palettes[pal.id] = pal
+    order.push(pal.id)
+  }
+  p.palettes = palettes
+  p.paletteOrder = order
+  if (!palettes[p.activePaletteId]) p.activePaletteId = order[0]
+}
+
+// ── palettes ─────────────────────────────────────────────────────────────────
+
+/** Add a palette (name made unique) after the active one; does not activate it. */
+export function addPalette(p: Project, name: string, colors: readonly RGBA[]): Palette {
+  const pal = createPalette(uniquePaletteName(p, name), colors)
+  p.palettes[pal.id] = pal
+  const at = p.paletteOrder.indexOf(p.activePaletteId)
+  p.paletteOrder.splice(at < 0 ? p.paletteOrder.length : at + 1, 0, pal.id)
+  return pal
+}
+
+export function duplicatePalette(p: Project, id: Id): Palette | null {
+  const src = p.palettes[id]
+  if (!src) return null
+  return addPalette(p, `${src.name} copy`, src.colors)
+}
+
+/** Remove a palette. The last palette cannot be removed (returns false). */
+export function removePalette(p: Project, id: Id): boolean {
+  if (!p.palettes[id] || p.paletteOrder.length <= 1) return false
+  const at = p.paletteOrder.indexOf(id)
+  delete p.palettes[id]
+  p.paletteOrder.splice(at, 1)
+  if (p.activePaletteId === id) p.activePaletteId = p.paletteOrder[Math.min(at, p.paletteOrder.length - 1)]
+  return true
+}
+
+export function setActivePalette(p: Project, id: Id): boolean {
+  if (!p.palettes[id]) return false
+  p.activePaletteId = id
+  return true
+}
+
+export function renamePalette(p: Project, id: Id, name: string): void {
+  const pal = p.palettes[id]
+  if (!pal) return
+  const clean = name.trim()
+  if (!clean || clean === pal.name) return
+  pal.name = uniquePaletteName(p, clean)
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────
