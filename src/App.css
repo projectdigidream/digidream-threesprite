@@ -312,6 +312,7 @@ input[type='text'], input:not([type]), input[inputmode] {
 .inspector__body section { display: flex; flex-direction: column; gap: 8px; }
 .inspector__body h4 { margin: 4px 0 0; font-size: 12px; color: var(--accent-2); text-transform: uppercase; letter-spacing: 0.04em; }
 .inspector__body small { color: var(--fg-dim); font-size: 11px; }
+.hint { color: var(--fg-dim); font-size: 11px; }
 .numgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 8px; }
 .numfield { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .numfield__label { font-size: 11px; color: var(--fg-dim); display: flex; align-items: center; gap: 4px; }
@@ -465,3 +466,49 @@ button.danger { background: var(--danger); color: #2a0b0b; border-color: transpa
 .timeline__empty { flex: 1; display: flex; align-items: center; justify-content: center; gap: 12px; padding: 16px; color: var(--fg-dim); }
 .inline-name { flex: 1; min-width: 0; min-height: 32px; padding: 0 8px; }
 .part-list__actions .inline-name { font-weight: 600; }
+
+/* ── phone density ─────────────────────────────────────────────────────────── */
+/* `.mobile` is only on the phone layout, so these need no media query. Panels
+   get smaller type and tighter spacing; the drawing tools, palette strip and
+   tab bar keep their full touch size. */
+
+.mobile .hint { display: none; }
+
+.mobile__sheet {
+  --hit: 34px;
+  max-height: 40%;
+  font-size: 12px;
+}
+.mobile__sheet .panel__header { padding: 3px 8px; font-size: 11px; }
+.mobile__sheet .panel__header .icon-btn { width: 30px; height: 30px; min-width: 30px; }
+.mobile__sheet .panel__empty { padding: 6px 8px; font-size: 11px; }
+.mobile__sheet .row { min-height: 30px; padding: 0 8px; gap: 6px; }
+.mobile__sheet .row__meta { font-size: 10px; }
+.mobile__sheet .part-list__rows { max-height: 150px; }
+.mobile__sheet .bone-tree__rows { max-height: 140px; }
+.mobile__sheet .solids__rows { max-height: 130px; }
+.mobile__sheet .part-list__actions,
+.mobile__sheet .solids__add { padding: 3px 6px; }
+
+.mobile__sheet .inspector__body { gap: 6px; padding: 4px 8px 8px; }
+.mobile__sheet .inspector__body section { gap: 6px; }
+.mobile__sheet .inspector__body h4 { margin: 2px 0 0; font-size: 11px; }
+.mobile__sheet .inspector__body small { font-size: 10px; }
+.mobile__sheet .field { gap: 4px; }
+.mobile__sheet .field > span { font-size: 11px; }
+.mobile__sheet .btn-row { gap: 4px; }
+.mobile__sheet .text-btn { min-height: 28px; font-size: 11px; }
+.mobile__sheet .chip { min-height: 28px; font-size: 11px; padding: 0 8px; }
+
+.mobile__sheet .numgrid { gap: 4px 6px; }
+.mobile__sheet .numfield { gap: 2px; }
+.mobile__sheet .numfield__label { font-size: 10px; }
+.mobile__sheet .numfield__ctl input { min-height: 28px; }
+.mobile__sheet .numfield__btn { min-height: 28px; width: 24px; min-width: 24px; }
+.mobile__sheet .numfield__suffix { font-size: 10px; }
+
+.mobile__sheet .timeline { min-height: 110px; max-height: 190px; }
+.mobile__sheet .transport { padding: 3px 6px; gap: 3px; }
+.mobile__sheet .transport__field { font-size: 11px; }
+.mobile__sheet .transport__field input[inputmode] { width: 44px; min-height: 28px; }
+.mobile__sheet .transport__frame { min-width: 48px; font-size: 11px; }

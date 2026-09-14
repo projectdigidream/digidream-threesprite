@@ -45,7 +45,10 @@ await page.waitForSelector('.panel:has-text("Solids")', { timeout: 5000 })
 
 // The panel's explanatory prose is desktop-only (the phone sheet is short).
 const solidsPanel = page.locator('.panel:has-text("Solids")')
-const hintShown = async (text) => (await solidsPanel.locator(`text=${text}`).count()) > 0
+const hintShown = async (text) => {
+  const l = solidsPanel.locator(`text=${text}`).first()
+  return (await l.count()) > 0 && await l.isVisible()
+}
 const wantHint = async (text, where) => {
   const shown = await hintShown(text)
   if (shown === mobile) errors.push(`${where} hint ${shown ? 'shown' : 'missing'} on ${mobile ? 'mobile' : 'desktop'}`)

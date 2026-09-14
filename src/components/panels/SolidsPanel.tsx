@@ -5,6 +5,7 @@ import type { Id, PrimitiveKind, Vec3 } from '../../domain/types'
 import { askConfirm } from '../../core/ui/dialogs'
 import { useIsMobile } from '../../hooks/useIsMobile'
 import { useEditor } from '../../store/editorStore'
+import { Hint } from '../ui/Hint'
 import { Icon } from '../ui/Icon'
 import { NumField } from '../ui/NumField'
 
@@ -117,7 +118,7 @@ export default function SolidsPanel({ compact = false }: { compact?: boolean }) 
             <NumField label="Pitch" value={prim.rotation.r} suffix="°" onCommit={v => vec('Rotate solid', 'rotation', { ...prim.rotation, r: v })} />
             <NumField label="Roll" value={prim.rotation.f} suffix="°" onCommit={v => vec('Rotate solid', 'rotation', { ...prim.rotation, f: v })} />
           </div>
-          {!mobile && <small>Positions are in the bone's frame (right / up / forward). With the Move tool, dragging in any view moves the shape in that view's plane.</small>}
+          <Hint>Positions are in the bone's frame (right / up / forward). With the Move tool, dragging in any view moves the shape in that view's plane.</Hint>
         </div>
       )}
       <div className="inspector__body">

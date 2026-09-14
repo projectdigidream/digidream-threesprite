@@ -3,6 +3,7 @@ import { restProjectedAngle, sampleBone, samplePart } from '../../domain/pose'
 import { attachPart, boneOrder, ensureBoneTrack, ensurePartTrack, reparentBone, setPartSkin } from '../../domain/project'
 import type { Animation, Bone, Id, Interp, Part, Vec3 } from '../../domain/types'
 import { useEditor } from '../../store/editorStore'
+import { Hint } from '../ui/Hint'
 import { Icon } from '../ui/Icon'
 import { InlineName } from '../ui/InlineName'
 import { NumField } from '../ui/NumField'
@@ -76,7 +77,7 @@ function RigInspector() {
             <RotFields label="Rot" value={bone.rest.rotation} onCommit={v => setBone('Bone rotation', b => { b.rest.rotation = v })} />
             <NumField label="Length" value={bone.length} min={1} onCommit={v => setBone('Bone length', b => { b.length = v })} />
           </div>
-          <small>Position is in the parent bone's frame (the character's frame for roots: right / up / forward from the feet). A bone with zero rotation points up.</small>
+          <Hint>Position is in the parent bone's frame (the character's frame for roots: right / up / forward from the feet). A bone with zero rotation points up.</Hint>
         </section>
       ) : <div className="panel__empty">Select a bone.</div>}
 
@@ -91,7 +92,7 @@ function RigInspector() {
             </select>
           </label>
           {part.solids ? (
-            <small>A solids part: its 3D shapes live in the bone's frame. Edit them in the Solids panel.</small>
+            <Hint>A solids part: its 3D shapes live in the bone's frame. Edit them in the Solids panel.</Hint>
           ) : (
             <>
               <div className="numgrid">
@@ -109,7 +110,7 @@ function RigInspector() {
                 <button className="text-btn" onClick={() => setPart('Upright part', p => { p.rotation = -restProjectedAngle(doc, p.boneId, 1) })}>Make upright (front view)</button>
                 <button className="text-btn" onClick={() => setPart('Center pivot', p => { const img = Object.values(p.variants[p.defaultVariant]?.images ?? {})[0]; if (img) p.pivot = { x: Math.floor(img.width / 2), y: img.height } })}>Pivot at feet</button>
               </div>
-              <small>Drag the pink pivot cross on the canvas to move where the image hangs on its bone. Images are drawn per view; the rig is shared.</small>
+              <Hint>Drag the pink pivot cross on the canvas to move where the image hangs on its bone. Images are drawn per view; the rig is shared.</Hint>
               <h4>Skin (bend between bones)</h4>
               <div className="skin__bones">
                 {boneOrder(doc).filter(id => id !== part.boneId).map(id => (
@@ -129,7 +130,7 @@ function RigInspector() {
                   <NumField label="Grid cell" value={part.skin.cell} min={1} max={64} suffix="px" title="Deformation grid resolution (smaller = smoother)" onCommit={v => commit('Skin cell', d => setPartSkin(d, part.id, { cell: v }))} />
                 </div>
               )}
-              <small>The image is cut into a grid; each point follows the bones near it, so the art bends, stretches and twists between bones in the plane of each view. At rest it draws pixel-exactly.</small>
+              <Hint>The image is cut into a grid; each point follows the bones near it, so the art bends, stretches and twists between bones in the plane of each view. At rest it draws pixel-exactly.</Hint>
             </>
           )}
         </section>
@@ -167,7 +168,7 @@ function AnimInspector() {
 
   return (
     <div className="inspector__body">
-      <small>Frame {frame + 1} of {anim.frameCount} · drag bone handles on the canvas to key them (rotating in the plane of the current view), or type values here.</small>
+      <Hint>Frame {frame + 1} of {anim.frameCount} · drag bone handles on the canvas to key them (rotating in the plane of the current view), or type values here.</Hint>
       {bone && bs ? (
         <section>
           <h4>{bone.name}</h4>
