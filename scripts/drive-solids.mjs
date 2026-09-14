@@ -42,6 +42,17 @@ if (mobile) {
   await page.locator('button[title="Solids"]').click()
 }
 await page.waitForSelector('.panel:has-text("Solids")', { timeout: 5000 })
+
+// The panel's explanatory prose is desktop-only (the phone sheet is short).
+const solidsPanel = page.locator('.panel:has-text("Solids")')
+const hintShown = async (text) => (await solidsPanel.locator(`text=${text}`).count()) > 0
+const wantHint = async (text, where) => {
+  const shown = await hintShown(text)
+  if (shown === mobile) errors.push(`${where} hint ${shown ? 'shown' : 'missing'} on ${mobile ? 'mobile' : 'desktop'}`)
+  else console.log(`hint ${shown ? 'shown' : 'hidden'} as expected on ${mobile ? 'mobile' : 'desktop'}: ${where}`)
+}
+await wantHint('Build the character out of 3D shapes', 'empty-state')
+
 await page.locator('.panel:has-text("Solids") button:has-text("Add a solids part")').click()
 await page.waitForTimeout(200)
 await page.locator('.solids__add button:has-text("Cube")').click()
@@ -73,6 +84,7 @@ await page.evaluate(() => {
   })
 })
 await page.waitForTimeout(200)
+await wantHint("Positions are in the bone's frame", 'primitive-fields')
 await shot('solids-front')
 
 // Side view (view 3): the arm should point at the camera; drag it forward with the Move tool

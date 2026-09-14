@@ -3,6 +3,7 @@ import { addPrimitive, addSolidsPart, convertSolidsToPixels, duplicatePrimitive,
 import { rgbaToHex } from '../../domain/palette'
 import type { Id, PrimitiveKind, Vec3 } from '../../domain/types'
 import { askConfirm } from '../../core/ui/dialogs'
+import { useIsMobile } from '../../hooks/useIsMobile'
 import { useEditor } from '../../store/editorStore'
 import { Icon } from '../ui/Icon'
 import { NumField } from '../ui/NumField'
@@ -15,6 +16,9 @@ const KIND_LABEL: Record<PrimitiveKind, string> = { cube: 'Cube', sphere: 'Spher
  * from every angle; the rig animates them in 3D.
  */
 export default function SolidsPanel({ compact = false }: { compact?: boolean }) {
+  // Explanatory prose is desktop-only: a phone sheet is short and the controls
+  // speak for themselves. `compact` is not the test — the desktop studio uses it too.
+  const mobile = useIsMobile()
   const doc = useEditor(s => s.doc)
   const partId = useEditor(s => s.ui.selectedPartId)
   const primId = useEditor(s => s.ui.selectedPrimitiveId)
@@ -52,8 +56,8 @@ export default function SolidsPanel({ compact = false }: { compact?: boolean }) 
       <div className="panel">
         <div className="panel__header"><Icon name="cube" size={16} /> Solids</div>
         <div className="panel__empty">
-          Build the character out of 3D shapes: every view is rendered from the same shapes, so they always agree.
-          <div className="btn-row" style={{ marginTop: 8 }}><button className="text-btn" onClick={addPart}><Icon name="plus" size={14} /> Add a solids part on “{boneId ? doc.skeleton.bones[boneId]?.name : 'root'}”</button></div>
+          {!mobile && 'Build the character out of 3D shapes: every view is rendered from the same shapes, so they always agree.'}
+          <div className="btn-row" style={{ marginTop: mobile ? 0 : 8 }}><button className="text-btn" onClick={addPart}><Icon name="plus" size={14} /> Add a solids part on “{boneId ? doc.skeleton.bones[boneId]?.name : 'root'}”</button></div>
         </div>
       </div>
     )
@@ -113,7 +117,7 @@ export default function SolidsPanel({ compact = false }: { compact?: boolean }) 
             <NumField label="Pitch" value={prim.rotation.r} suffix="°" onCommit={v => vec('Rotate solid', 'rotation', { ...prim.rotation, r: v })} />
             <NumField label="Roll" value={prim.rotation.f} suffix="°" onCommit={v => vec('Rotate solid', 'rotation', { ...prim.rotation, f: v })} />
           </div>
-          <small>Positions are in the bone's frame (right / up / forward). With the Move tool, dragging in any view moves the shape in that view's plane.</small>
+          {!mobile && <small>Positions are in the bone's frame (right / up / forward). With the Move tool, dragging in any view moves the shape in that view's plane.</small>}
         </div>
       )}
       <div className="inspector__body">
