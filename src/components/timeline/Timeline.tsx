@@ -1,8 +1,9 @@
-import { useRef } from 'react'
-import { moveKey, removeKey } from '../../domain/animation'
+import { useEffect, useRef, useState } from 'react'
+import { copyKeys, deleteRowKeys, moveRowKeys, pasteKeys, pastedRefs, rowKeyFrames, type KeyClipboard, type KeyRef } from '../../domain/animation'
 import { addAnimation, boneOrder, removeAnimation, setFrameCount } from '../../domain/project'
-import type { Animation, Id, Key } from '../../domain/types'
+import type { Animation, Id } from '../../domain/types'
 import { askConfirm, askText } from '../../core/ui/dialogs'
+import { isTypingTarget } from '../../hooks/useKeyboardShortcuts'
 import { editorStore, useEditor } from '../../store/editorStore'
 import { Icon } from '../ui/Icon'
 
@@ -21,29 +22,7 @@ const CELL = 20
 type RowKind = 'bone' | 'part'
 interface Row { kind: RowKind; id: Id; name: string; depth: number }
 
-/** Every key list of a row, typed loosely: the timeline only reads/moves frames. */
-function tracksOf(anim: Animation, row: Row): Key<unknown>[][] {
-  if (row.kind === 'bone') {
-    const t = anim.boneTracks[row.id]
-    return t ? [t.rotation, t.translate, t.scale] : []
-  }
-  const t = anim.partTracks[row.id]
-  return t ? [t.visible, t.variant] : []
-}
-
-function keyFrames(anim: Animation, row: Row): Set<number> {
-  const out = new Set<number>()
-  for (const keys of tracksOf(anim, row)) for (const k of keys) out.add(k.frame)
-  return out
-}
-
-function moveRowKeys(anim: Animation, row: Row, from: number, to: number): void {
-  for (const keys of tracksOf(anim, row)) moveKey(keys, from, to)
-}
-
-function deleteRowKeys(anim: Animation, row: Row, frame: number): void {
-  for (const keys of tracksOf(anim, row)) removeKey(keys, frame)
-}
+const refId = (kind: RowKind, id: Id, frame: number) => `${kind}:${id}:${frame}`
 
 export default function Timeline() {
   const doc = useEditor(s => s.doc)
@@ -52,8 +31,21 @@ export default function Timeline() {
   const commit = useEditor(s => s.commit)
   const anim = ui.animId ? doc.animations[ui.animId] : null
   const gridRef = useRef<HTMLDivElement>(null)
+  const labelsRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<{ row: Row; from: number; to: number; pointerId: number; el: HTMLElement } | null>(null)
   const longPressRef = useRef(0)
+  /** Selected diamonds, for copying. */
+  const [sel, setSel] = useState<KeyRef[]>([])
+  const [clip, setClip] = useState<KeyClipboard | null>(null)
+  /** Touch has no modifier keys, so picking several keys gets its own toggle. */
+  const [multi, setMulti] = useState(false)
+  // Keys can vanish under the selection (undo, delete), so only count the ones
+  // still on the timeline; otherwise the Copy button promises more than it takes.
+  const liveSel = anim ? sel.filter(s => rowKeyFrames(anim, s.kind, s.id).has(s.frame)) : []
+  const selSet = new Set(liveSel.map(s => refId(s.kind, s.id, s.frame)))
+
+  // A selection belongs to one animation.
+  useEffect(() => { setSel([]) }, [ui.animId])
 
   const rows: Row[] = []
   const depth = new Map<Id, number>()
@@ -83,9 +75,47 @@ export default function Timeline() {
     setUi({ frame: frameFromX(e.clientX) })
   }
 
+  // selection
+  const toggleSel = (row: Row, frame: number) => {
+    const k = refId(row.kind, row.id, frame)
+    setSel(selSet.has(k)
+      ? liveSel.filter(s => refId(s.kind, s.id, s.frame) !== k)
+      : [...liveSel, { kind: row.kind, id: row.id, frame }])
+  }
+
+  const copySelection = () => {
+    if (!anim || liveSel.length === 0) return
+    const c = copyKeys(anim, liveSel)
+    if (c) setClip(c)
+  }
+  const pasteAtPlayhead = () => {
+    if (!anim || !clip) return
+    const at = ui.frame
+    const wrote = commit('Paste keys', d => {
+      const a = d.animations[anim.id]
+      if (a) pasteKeys(a, clip, at, (kind, id) => (kind === 'bone' ? !!d.skeleton.bones[id] : !!d.parts[id]))
+    })
+    if (wrote) setSel(pastedRefs(clip, at, anim.frameCount))
+  }
+
+  // Copy / paste with the keyboard as well as the transport buttons (phones have no keyboard).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (isTypingTarget(e.target) || !(e.metaKey || e.ctrlKey)) return
+      const k = e.key.toLowerCase()
+      if (k === 'c' && liveSel.length > 0) { e.preventDefault(); copySelection() }
+      else if (k === 'v' && clip) { e.preventDefault(); pasteAtPlayhead() }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  })
+
   // key drags
   const onKeyDown = (e: React.PointerEvent<HTMLElement>, row: Row, frame: number) => {
     e.stopPropagation()
+    // In multi-select, or with a modifier held, build the selection instead of starting a drag.
+    if (multi || e.metaKey || e.ctrlKey || e.shiftKey) { toggleSel(row, frame); return }
+    if (!selSet.has(refId(row.kind, row.id, frame))) setSel([{ kind: row.kind, id: row.id, frame }])
     const el = e.currentTarget as HTMLElement
     el.setPointerCapture(e.pointerId)
     dragRef.current = { row, from: frame, to: frame, pointerId: e.pointerId, el }
@@ -96,7 +126,7 @@ export default function Timeline() {
         if (dragRef.current && dragRef.current.from === dragRef.current.to && anim) {
           dragRef.current = null
           if (await askConfirm('Delete the keys at this frame?', { okLabel: 'Delete', danger: true })) {
-            commit('Delete keys', d => { const a = d.animations[anim.id]; if (a) deleteRowKeys(a, row, frame) })
+            commit('Delete keys', d => { const a = d.animations[anim.id]; if (a) deleteRowKeys(a, row.kind, row.id, frame) })
           }
         }
       }, 600)
@@ -114,17 +144,29 @@ export default function Timeline() {
     clearTimeout(longPressRef.current)
     d.el.style.transform = ''
     dragRef.current = null
-    if (d.to !== d.from && anim) commit('Move keys', doc2 => { const a = doc2.animations[anim.id]; if (a) moveRowKeys(a, d.row, d.from, d.to) })
+    if (d.to !== d.from && anim) {
+      commit('Move keys', doc2 => { const a = doc2.animations[anim.id]; if (a) moveRowKeys(a, d.row.kind, d.row.id, d.from, d.to) })
+      setSel([{ kind: d.row.kind, id: d.row.id, frame: d.to }])
+    }
   }
   const onKeyContext = (e: React.MouseEvent, row: Row, frame: number) => {
     e.preventDefault()
     if (!anim) return
-    commit('Delete keys', d => { const a = d.animations[anim.id]; if (a) deleteRowKeys(a, row, frame) })
+    commit('Delete keys', d => { const a = d.animations[anim.id]; if (a) deleteRowKeys(a, row.kind, row.id, frame) })
+    setSel(cur => cur.filter(s => refId(s.kind, s.id, s.frame) !== refId(row.kind, row.id, frame)))
   }
 
   return (
     <div className="timeline">
-      <Transport anim={anim} />
+      <Transport
+        anim={anim}
+        selected={liveSel.length}
+        clip={clip}
+        multi={multi}
+        onToggleMulti={() => setMulti(v => !v)}
+        onCopy={copySelection}
+        onPaste={pasteAtPlayhead}
+      />
       {!anim && (
         <div className="timeline__empty">
           <span>No animations yet.</span>
@@ -133,41 +175,51 @@ export default function Timeline() {
       )}
       {anim && (
         <div className="timeline__body">
-          <div className="timeline__labels">
+          <div className="timeline__labels" onWheel={e => { if (gridRef.current) gridRef.current.scrollTop += e.deltaY }}>
             <div className="timeline__corner" />
-            {rows.map(r => (
-              <button
-                key={`${r.kind}:${r.id}`}
-                className={`timeline__label ${(r.kind === 'bone' ? ui.selectedBoneId === r.id : ui.selectedPartId === r.id) ? 'is-selected' : ''}`}
-                style={{ paddingLeft: 8 + r.depth * 10 }}
-                onClick={() => r.kind === 'bone' ? setUi({ selectedBoneId: r.id }) : editorStore.getState().selectPart(r.id)}
-              >
-                <Icon name={r.kind === 'bone' ? 'bone' : 'layers'} size={12} />
-                <span>{r.name}</span>
-              </button>
-            ))}
+            {/* Scrolled in step with the grid so a name always sits on its own row. */}
+            <div className="timeline__labels-scroll" ref={labelsRef}>
+              {rows.map(r => (
+                <button
+                  key={`${r.kind}:${r.id}`}
+                  className={`timeline__label ${(r.kind === 'bone' ? ui.selectedBoneId === r.id : ui.selectedPartId === r.id) ? 'is-selected' : ''}`}
+                  style={{ paddingLeft: 8 + r.depth * 10 }}
+                  title={r.name}
+                  onClick={() => r.kind === 'bone' ? setUi({ selectedBoneId: r.id }) : editorStore.getState().selectPart(r.id)}
+                >
+                  <Icon name={r.kind === 'bone' ? 'bone' : 'layers'} size={12} />
+                  <span>{r.name}</span>
+                </button>
+              ))}
+            </div>
           </div>
-          <div className="timeline__grid" ref={gridRef}>
+          <div className="timeline__grid" ref={gridRef} onScroll={e => { if (labelsRef.current) labelsRef.current.scrollTop = e.currentTarget.scrollTop }}>
             <div className="timeline__header" style={{ width: anim.frameCount * CELL }} onPointerDown={onHeaderDown} onPointerMove={onHeaderMove}>
               {Array.from({ length: anim.frameCount }, (_, f) => (
                 <div key={f} className={`timeline__hcell ${f === ui.frame ? 'is-current' : ''}`} style={{ width: CELL }}>{f + 1}</div>
               ))}
             </div>
             {rows.map(r => {
-              const keys = keyFrames(anim, r)
+              const keys = rowKeyFrames(anim, r.kind, r.id)
               return (
                 <div key={`${r.kind}:${r.id}`} className="timeline__row" style={{ width: anim.frameCount * CELL }}>
                   {Array.from({ length: anim.frameCount }, (_, f) => (
-                    <div key={f} className={`timeline__cell ${f === ui.frame ? 'is-current' : ''}`} style={{ width: CELL }} onClick={() => setUi({ frame: f })}>
+                    <div
+                      key={f}
+                      className={`timeline__cell ${f === ui.frame ? 'is-current' : ''}`}
+                      style={{ width: CELL }}
+                      onClick={e => { setUi({ frame: f }); if (!multi && !(e.metaKey || e.ctrlKey || e.shiftKey)) setSel([]) }}
+                    >
                       {keys.has(f) && (
                         <span
-                          className="timeline__key"
+                          className={`timeline__key ${selSet.has(refId(r.kind, r.id, f)) ? 'is-selected' : ''}`}
                           onPointerDown={e => onKeyDown(e, r, f)}
                           onPointerMove={onKeyMove}
                           onPointerUp={onKeyUp}
                           onPointerCancel={onKeyUp}
+                          onClick={e => e.stopPropagation()}
                           onContextMenu={e => onKeyContext(e, r, f)}
-                          title="Drag to move · right-click / long-press to delete"
+                          title="Click to select · shift or ⌘/Ctrl-click to add · drag to move · right-click or long-press to delete"
                         >◆</span>
                       )}
                     </div>
@@ -183,7 +235,17 @@ export default function Timeline() {
   )
 }
 
-function Transport({ anim }: { anim: Animation | null }) {
+interface TransportProps {
+  anim: Animation | null
+  selected: number
+  clip: KeyClipboard | null
+  multi: boolean
+  onToggleMulti: () => void
+  onCopy: () => void
+  onPaste: () => void
+}
+
+function Transport({ anim, selected, clip, multi, onToggleMulti, onCopy, onPaste }: TransportProps) {
   const doc = useEditor(s => s.doc)
   const ui = useEditor(s => s.ui)
   const setUi = useEditor(s => s.setUi)
@@ -227,6 +289,25 @@ function Transport({ anim }: { anim: Animation | null }) {
             <span>loop</span>
           </label>
           <button className={`icon-btn ${ui.onion ? 'is-active' : ''}`} title="Onion skin (previous frame)" onClick={() => setUi({ onion: !ui.onion })}><Icon name="onion" size={16} /></button>
+          <span className="transport__sep" />
+          <button
+            className={`icon-btn ${multi ? 'is-active' : ''}`}
+            title="Pick several keyframes: tap each one to add or remove it"
+            onClick={onToggleMulti}
+          ><Icon name="select" size={16} /></button>
+          <button
+            className="icon-btn"
+            disabled={selected === 0}
+            title={selected === 0 ? 'Copy keyframes: click a diamond, shift or ⌘/Ctrl-click for more' : `Copy ${selected} keyframe${selected === 1 ? '' : 's'} (⌘/Ctrl+C)`}
+            onClick={onCopy}
+          ><Icon name="copy" size={16} /></button>
+          <button
+            className="icon-btn"
+            disabled={!clip}
+            title={clip ? `Paste ${clip.diamonds} keyframe${clip.diamonds === 1 ? '' : 's'} at the current frame (⌘/Ctrl+V)` : 'Paste keyframes at the current frame'}
+            onClick={onPaste}
+          ><Icon name="paste" size={16} /></button>
+          {selected > 0 && <span className="transport__hint">{selected} selected</span>}
         </>
       )}
     </div>

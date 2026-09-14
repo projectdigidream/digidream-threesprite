@@ -1,4 +1,4 @@
-import type { Animation, Interp, Key, Vec2, Vec3 } from './types'
+import type { Animation, BoneTrack, Id, Interp, Key, PartTrack, Vec2, Vec3 } from './types'
 
 /** Which frame is showing `seconds` into the animation. Pure, shared by playback and export. */
 export function frameAt(anim: Pick<Animation, 'fps' | 'frameCount' | 'loop'>, seconds: number): number {
@@ -81,4 +81,138 @@ export function moveKey<T>(keys: Key<T>[], from: number, to: number): boolean {
 /** Drop keys at or beyond the frame count (after shrinking an animation). */
 export function clampKeys<T>(keys: Key<T>[], frameCount: number): void {
   for (let i = keys.length - 1; i >= 0; i--) if (keys[i].frame >= frameCount) keys.splice(i, 1)
+}
+
+// ── timeline rows ────────────────────────────────────────────────────────────
+
+export function ensureBoneTrack(anim: Animation, boneId: Id): BoneTrack {
+  return (anim.boneTracks[boneId] ??= { rotation: [], translate: [], scale: [] })
+}
+
+export function ensurePartTrack(anim: Animation, partId: Id): PartTrack {
+  return (anim.partTracks[partId] ??= { visible: [], variant: [] })
+}
+
+/** A timeline row is one bone or one part; the diamond at a frame stands for all of that row's tracks. */
+export type RowKind = 'bone' | 'part'
+export type TrackName = 'rotation' | 'translate' | 'scale' | 'visible' | 'variant'
+/** One diamond in the timeline: every key of that row at that frame. */
+export interface KeyRef { kind: RowKind; id: Id; frame: number }
+
+/** The row's key lists with their names, typed loosely: callers only read frames and move values across. */
+function rowTracks(anim: Animation, kind: RowKind, id: Id): [TrackName, Key<unknown>[]][] {
+  if (kind === 'bone') {
+    const t = anim.boneTracks[id]
+    return t ? [['rotation', t.rotation], ['translate', t.translate], ['scale', t.scale]] : []
+  }
+  const t = anim.partTracks[id]
+  return t ? [['visible', t.visible], ['variant', t.variant]] : []
+}
+
+/** Frames of a row that carry at least one key. */
+export function rowKeyFrames(anim: Animation, kind: RowKind, id: Id): Set<number> {
+  const out = new Set<number>()
+  for (const [, keys] of rowTracks(anim, kind, id)) for (const k of keys) out.add(k.frame)
+  return out
+}
+
+/** Move every key of a row from one frame to another. */
+export function moveRowKeys(anim: Animation, kind: RowKind, id: Id, from: number, to: number): void {
+  for (const [, keys] of rowTracks(anim, kind, id)) moveKey(keys, from, to)
+}
+
+/** Delete every key of a row at a frame. Returns true when something went. */
+export function deleteRowKeys(anim: Animation, kind: RowKind, id: Id, frame: number): boolean {
+  let hit = false
+  for (const [, keys] of rowTracks(anim, kind, id)) if (removeKey(keys, frame)) hit = true
+  return hit
+}
+
+// ── copy / paste ─────────────────────────────────────────────────────────────
+
+interface CopiedKey { track: TrackName; frame: number; value: unknown; interp: Interp }
+interface CopiedRow { kind: RowKind; id: Id; keys: CopiedKey[] }
+
+/** Keys lifted out of an animation, ready to be written back at another frame. */
+export interface KeyClipboard {
+  rows: CopiedRow[]
+  /** Earliest copied frame; paste keeps every key's distance from it. */
+  baseFrame: number
+  /** How many individual track keys were taken (not diamonds). */
+  count: number
+  /** How many timeline diamonds were taken. */
+  diamonds: number
+}
+
+/** Values are flat (Vec3, boolean, id), so a shallow copy detaches them from the document. */
+const cloneValue = (v: unknown): unknown => (v !== null && typeof v === 'object' ? { ...(v as Record<string, unknown>) } : v)
+
+/** Copy every key at the given row/frame pairs. Null when none of them exist. */
+export function copyKeys(anim: Animation, refs: readonly KeyRef[]): KeyClipboard | null {
+  const byRow = new Map<string, CopiedRow>()
+  const seen = new Set<string>()
+  let baseFrame = Infinity
+  let count = 0
+  let diamonds = 0
+  for (const ref of refs) {
+    const rowKey = `${ref.kind}:${ref.id}`
+    if (seen.has(`${rowKey}:${ref.frame}`)) continue
+    seen.add(`${rowKey}:${ref.frame}`)
+    let taken = 0
+    for (const [track, keys] of rowTracks(anim, ref.kind, ref.id)) {
+      const k = keys.find(x => x.frame === ref.frame)
+      if (!k) continue
+      let row = byRow.get(rowKey)
+      if (!row) { row = { kind: ref.kind, id: ref.id, keys: [] }; byRow.set(rowKey, row) }
+      row.keys.push({ track, frame: ref.frame, value: cloneValue(k.value), interp: k.interp })
+      taken++
+    }
+    if (taken > 0) { count += taken; diamonds++; baseFrame = Math.min(baseFrame, ref.frame) }
+  }
+  if (count === 0) return null
+  return { rows: [...byRow.values()], baseFrame, count, diamonds }
+}
+
+/**
+ * Write the clipboard back with `atFrame` standing in for the earliest copied
+ * frame, so the spacing between copied keys is kept. Keys landing outside the
+ * animation are dropped, as are rows `rowExists` rejects (a bone or part
+ * deleted since the copy). Returns how many keys were written.
+ */
+export function pasteKeys(anim: Animation, clip: KeyClipboard, atFrame: number, rowExists: (kind: RowKind, id: Id) => boolean = () => true): number {
+  let written = 0
+  for (const row of clip.rows) {
+    if (!rowExists(row.kind, row.id)) continue
+    const landing = row.keys
+      .map(k => ({ k, frame: atFrame + (k.frame - clip.baseFrame) }))
+      .filter(x => x.frame >= 0 && x.frame < anim.frameCount)
+    if (landing.length === 0) continue
+    const tracks = row.kind === 'bone' ? ensureBoneTrack(anim, row.id) : ensurePartTrack(anim, row.id)
+    for (const { k, frame } of landing) {
+      const keys = (tracks as unknown as Record<string, Key<unknown>[] | undefined>)[k.track]
+      if (!keys) continue
+      // Replace rather than overwrite, so the copied interpolation lands too.
+      removeKey(keys, frame)
+      setKey(keys, frame, cloneValue(k.value), k.interp)
+      written++
+    }
+  }
+  return written
+}
+
+/** Where each copied diamond lands when pasted at `atFrame`, clamped to the animation. */
+export function pastedRefs(clip: KeyClipboard, atFrame: number, frameCount: number): KeyRef[] {
+  const out: KeyRef[] = []
+  const seen = new Set<string>()
+  for (const row of clip.rows) {
+    for (const k of row.keys) {
+      const frame = atFrame + (k.frame - clip.baseFrame)
+      if (frame < 0 || frame >= frameCount) continue
+      const id = `${row.kind}:${row.id}:${frame}`
+      if (seen.has(id)) continue
+      seen.add(id)
+      out.push({ kind: row.kind, id: row.id, frame })
+    }
+  }
+  return out
 }

@@ -334,10 +334,13 @@ input[type='text'], input:not([type]), input[inputmode] {
 .transport__field { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--fg-dim); }
 .transport__field input[inputmode] { width: 52px; min-height: 30px; padding: 0 6px; text-align: center; }
 .transport__field--check input { width: auto; }
+.transport__hint { font-size: 11px; color: var(--fg-dim); }
 .timeline__body { display: flex; flex: 1; min-height: 0; overflow: hidden; }
 .timeline__labels { width: 150px; flex: none; display: flex; flex-direction: column; border-right: 1px solid var(--border); overflow: hidden; }
 .timeline__corner { height: 22px; flex: none; }
-.timeline__label { height: 22px; min-height: 22px; padding: 0 8px; border: none; border-radius: 0; background: transparent; justify-content: flex-start; gap: 6px; font-size: 12px; white-space: nowrap; overflow: hidden; }
+/* Scrolled from the grid's onScroll so the names keep pace with their rows. */
+.timeline__labels-scroll { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+.timeline__label { height: 22px; min-height: 22px; flex: none; padding: 0 8px; border: none; border-radius: 0; background: transparent; justify-content: flex-start; gap: 6px; font-size: 12px; white-space: nowrap; overflow: hidden; }
 .timeline__label.is-selected { color: var(--accent); background: var(--bg-4); }
 .timeline__grid { position: relative; flex: 1; overflow: auto; }
 .timeline__header { display: flex; height: 22px; cursor: ew-resize; touch-action: none; position: sticky; top: 0; background: var(--bg-2); z-index: 1; }
@@ -347,6 +350,7 @@ input[type='text'], input:not([type]), input[inputmode] {
 .timeline__cell { position: relative; height: 22px; border-right: 1px solid rgba(48,55,72,0.5); border-bottom: 1px solid rgba(48,55,72,0.5); flex: none; }
 .timeline__cell.is-current { background: rgba(255,180,84,0.08); }
 .timeline__key { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--accent); font-size: 13px; cursor: grab; touch-action: none; user-select: none; }
+.timeline__key.is-selected { color: var(--fg); background: rgba(255,180,84,0.25); box-shadow: inset 0 0 0 1px var(--accent); }
 .timeline__playhead { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--accent); pointer-events: none; opacity: 0.7; }
 
 /* ── 3D preview / studio ───────────────────────────────────────────────────── */

@@ -30,6 +30,7 @@ const PATHS: Record<string, string> = {
   export: 'M12 3v12 M8 7l4-4 4 4 M4 15v4h16v-4',
   film: 'M4 4h16v16H4z M4 9h16 M4 15h16 M9 4v16 M15 4v16',
   copy: 'M8 8h12v12H8z M16 8V4H4v12h4',
+  paste: 'M8 5H5v16h14V5h-3 M9 3h6v4H9z',
   onion: 'M12 3a7 7 0 017 7c0 5-7 11-7 11S5 15 5 10a7 7 0 017-7z M12 7a3 3 0 100 6 3 3 0 000-6z',
   new: 'M6 2h9l5 5v15H6z M15 2v5h5 M12 11v6 M9 14h6',
   save: 'M4 4h13l3 3v13H4z M8 4v5h7V4 M8 20v-6h8v6',

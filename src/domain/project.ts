@@ -375,13 +375,9 @@ export function setFrameCount(p: Project, animId: Id, frameCount: number): void 
   }
 }
 
-export function ensureBoneTrack(anim: Animation, boneId: Id) {
-  return (anim.boneTracks[boneId] ??= { rotation: [], translate: [], scale: [] })
-}
-
-export function ensurePartTrack(anim: Animation, partId: Id) {
-  return (anim.partTracks[partId] ??= { visible: [], variant: [] })
-}
+// Track creation lives with the other key helpers; re-exported here because
+// callers reach for it alongside the rest of the project operations.
+export { ensureBoneTrack, ensurePartTrack } from './animation'
 
 // ── views ────────────────────────────────────────────────────────────────────
 
