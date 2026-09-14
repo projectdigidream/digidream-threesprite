@@ -6,8 +6,10 @@
 import { clampKeys } from './animation'
 import { newId } from './ids'
 import { createImage } from './image'
+import { applyAffine, composeAffine, eulerFromMatrix, eulerMatrix, invertAffine, mul3, rotationOf3, type Mat34 } from './math3'
 import { createPalette, DEFAULT_PALETTE, MAX_PALETTE, PRESET_PALETTES, uniquePaletteName } from './palette'
-import { restProjectedAngle } from './pose'
+import { evalPose, projectBone, restProjectedAngle, viewProj } from './pose'
+import { compose, rotate, translate } from './transform'
 import {
   FORMAT_VERSION,
   MAX_CANVAS,
@@ -27,7 +29,7 @@ import {
   type Vec3,
   type ViewIndex,
 } from './types'
-import { authoredViews, clampViewCount } from './views'
+import { authoredViews, clampViewCount, isDerived, mirrorOf } from './views'
 
 export interface NewProjectOptions {
   name?: string
@@ -113,10 +115,15 @@ export function addBone(p: Project, opts: AddBoneOptions = {}): Bone {
 }
 
 /** Remove a bone. Children and parts move to its parent (or become roots / move to the first root). */
-export function removeBone(p: Project, id: Id): void {
+/** Remove a bone: children move up to its parent, its parts re-hang from the parent (or the first root) without moving in `view`. */
+export function removeBone(p: Project, id: Id, view: ViewIndex = 1): void {
   const bone = p.skeleton.bones[id]
   if (!bone) return
   if (Object.keys(p.skeleton.bones).length <= 1) throw new Error('cannot remove the last bone')
+  // The removed bone's rest frame, before the skeleton changes: its parts are
+  // re-hung from the fallback bone so they stay where they are.
+  const oldWorld = evalPose(p.skeleton, null, 0).get(id)
+  const oldLength = bone.length
   const parentId = bone.parentId
   if (parentId) {
     const siblings = p.skeleton.bones[parentId].children
@@ -129,11 +136,62 @@ export function removeBone(p: Project, id: Id): void {
   for (const c of bone.children) p.skeleton.bones[c].parentId = parentId
   delete p.skeleton.bones[id]
   const fallback = parentId ?? p.skeleton.rootOrder[0]
+  const newWorld = evalPose(p.skeleton, null, 0).get(fallback)
   for (const part of Object.values(p.parts)) {
-    if (part.boneId === id) part.boneId = fallback
-    if (part.skin) part.skin.bones = part.skin.bones.filter(b => b !== id)
+    if (part.boneId === id) {
+      if (oldWorld && newWorld) rehangPart(p, part, oldWorld, oldLength, fallback, newWorld, view)
+      part.boneId = fallback
+    }
+    // A skin never lists the removed bone, nor the part's own (possibly new) bone.
+    if (part.skin) part.skin.bones = part.skin.bones.filter(b => b !== id && b !== part.boneId)
   }
   for (const anim of Object.values(p.animations)) delete anim.boneTracks[id]
+}
+
+/**
+ * Attach a part to another bone without moving it on screen. A pixel part has
+ * one offset and rotation for every view, expressed in its bone's projected
+ * frame, so it is re-expressed in the new bone's frame of `view`: it stays
+ * exactly in place there and follows the new bone's frame in the other views.
+ * A solids part's shapes are re-expressed in the new bone's 3D frame, so they
+ * stay put in every view. Returns false when nothing changed.
+ */
+export function attachPart(p: Project, partId: Id, boneId: Id, view: ViewIndex = 1): boolean {
+  const part = p.parts[partId]
+  const bone = p.skeleton.bones[boneId]
+  const oldBone = part ? p.skeleton.bones[part.boneId] : undefined
+  if (!part || !bone || part.boneId === boneId) return false
+  const pose = evalPose(p.skeleton, null, 0)
+  const oldWorld = pose.get(part.boneId)
+  const newWorld = pose.get(boneId)
+  if (oldWorld && newWorld && oldBone) rehangPart(p, part, oldWorld, oldBone.length, boneId, newWorld, view)
+  part.boneId = boneId
+  if (part.skin) setPartSkin(p, partId, {})
+  return true
+}
+
+/** Rewrite a part's placement from `oldWorld` (its current bone's rest frame) into `newWorld` (the rest frame of `boneId`). */
+function rehangPart(p: Project, part: Part, oldWorld: Mat34, oldLength: number, boneId: Id, newWorld: Mat34, view: ViewIndex): void {
+  if (part.solids) {
+    const inv = invertAffine(newWorld)
+    if (!inv) return
+    const rel = composeAffine(inv, oldWorld)
+    const relRot = rotationOf3(rel)
+    for (const prim of Object.values(part.solids.primitives)) {
+      prim.position = applyAffine(rel, prim.position)
+      prim.rotation = eulerFromMatrix(mul3(relRot, eulerMatrix(prim.rotation)))
+    }
+    return
+  }
+  const N = p.views.count
+  const src = isDerived(N, p.views.mirror, view) ? mirrorOf(N, view) : view
+  const vp = viewProj(p, src)
+  const a = projectBone(oldWorld, oldLength, vp)
+  const b = projectBone(newWorld, p.skeleton.bones[boneId].length, vp)
+  // Solve T(b.origin)·R(b.angle)·T(offset')·R(rotation') = T(a.origin)·R(a.angle)·T(offset)·R(rotation).
+  const m = compose(rotate(-b.angle), translate(a.origin.x - b.origin.x, a.origin.y - b.origin.y), rotate(a.angle), translate(part.offset.x, part.offset.y))
+  part.offset = { x: m.tx, y: m.ty }
+  part.rotation = part.rotation + a.angle - b.angle
 }
 
 /** Configure skinning on a part. `bones` are the extra influencing bones; an empty list removes skinning. */

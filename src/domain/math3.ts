@@ -99,6 +99,27 @@ export function applyAffine(a: Mat34, v: Vec3): Vec3 {
   return add3(apply3(a.m, v), a.t)
 }
 
+/** Inverse of a 3×3 matrix, or null when singular. */
+export function invert3(m: Mat3): Mat3 | null {
+  const [a, b, c, d, e, f, g, h, i] = m
+  const A = e * i - f * h, B = -(d * i - f * g), C = d * h - e * g
+  const det = a * A + b * B + c * C
+  if (!Number.isFinite(det) || Math.abs(det) < 1e-12) return null
+  const k = 1 / det
+  return [
+    A * k, -(b * i - c * h) * k, (b * f - c * e) * k,
+    B * k, (a * i - c * g) * k, -(a * f - c * d) * k,
+    C * k, -(a * h - b * g) * k, (a * e - b * d) * k,
+  ]
+}
+
+/** Inverse of an affine, or null when its linear part is singular. */
+export function invertAffine(a: Mat34): Mat34 | null {
+  const inv = invert3(a.m)
+  if (!inv) return null
+  return { m: inv, t: scale3(apply3(inv, a.t), -1) }
+}
+
 /** Rotation part of an affine, orthonormalised (drops scale). */
 export function rotationOf3(a: Mat34): Mat3 {
   const x = normalize3({ r: a.m[0], u: a.m[3], f: a.m[6] })

@@ -1,6 +1,6 @@
 import { getKey, removeKey, setKey } from '../../domain/animation'
 import { restProjectedAngle, sampleBone, samplePart } from '../../domain/pose'
-import { boneOrder, ensureBoneTrack, ensurePartTrack, reparentBone, setPartSkin } from '../../domain/project'
+import { attachPart, boneOrder, ensureBoneTrack, ensurePartTrack, reparentBone, setPartSkin } from '../../domain/project'
 import type { Animation, Bone, Id, Interp, Part, Vec3 } from '../../domain/types'
 import { useEditor } from '../../store/editorStore'
 import { Icon } from '../ui/Icon'
@@ -44,6 +44,7 @@ function RigInspector() {
   const doc = useEditor(s => s.doc)
   const boneId = useEditor(s => s.ui.selectedBoneId)
   const partId = useEditor(s => s.ui.selectedPartId)
+  const view = useEditor(s => s.ui.view)
   const commit = useEditor(s => s.commit)
   const bone = boneId ? doc.skeleton.bones[boneId] : null
   const part = partId ? doc.parts[partId] : null
@@ -85,7 +86,7 @@ function RigInspector() {
           <label className="field"><span>Name</span><InlineName value={part.name} onCommit={name => setPart('Rename part', p => { p.name = name })} title="Part name" /></label>
           <label className="field">
             <span>Bone</span>
-            <select className="select" value={part.boneId} onChange={e => setPart('Attach part', p => { p.boneId = e.target.value })}>
+            <select className="select" value={part.boneId} title="The part keeps its place in this view when it moves to another bone" onChange={e => { const id = e.target.value; commit('Attach part', d => { attachPart(d, part.id, id, view) }) }}>
               {Object.values(doc.skeleton.bones).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
             </select>
           </label>

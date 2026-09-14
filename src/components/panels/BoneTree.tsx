@@ -9,6 +9,7 @@ export default function BoneTree() {
   const selectedBoneId = useEditor(s => s.ui.selectedBoneId)
   const rigTool = useEditor(s => s.ui.rigTool)
   const mode = useEditor(s => s.ui.mode)
+  const view = useEditor(s => s.ui.view)
   const setUi = useEditor(s => s.setUi)
   const commit = useEditor(s => s.commit)
 
@@ -32,8 +33,8 @@ export default function BoneTree() {
     if (!selectedBoneId) return
     const b = doc.skeleton.bones[selectedBoneId]
     if (Object.keys(doc.skeleton.bones).length <= 1) { await notice('A rig needs at least one bone.'); return }
-    if (!(await askConfirm(`Delete bone “${b.name}”?`, { message: 'Its children and parts move to its parent. This is undoable.', okLabel: 'Delete', danger: true }))) return
-    commit('Delete bone', d => removeBone(d, selectedBoneId))
+    if (!(await askConfirm(`Delete bone “${b.name}”?`, { message: 'Its children and parts move to its parent; parts stay where they are on screen. This is undoable.', okLabel: 'Delete', danger: true }))) return
+    commit('Delete bone', d => removeBone(d, selectedBoneId, view))
   }
 
   return (

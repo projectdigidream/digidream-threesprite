@@ -1,12 +1,18 @@
 import { describe, it, expect } from 'vitest'
 import { setKey } from '../../domain/animation'
 import { createImage } from '../../domain/image'
+import { partCanvasMatrix } from '../../core/raster/rasterizer'
+import { applyAffine, eulerMatrix, mul3, rotationOf3 } from '../../domain/math3'
 import { activePalette, DEFAULT_PALETTE } from '../../domain/palette'
+import { evalPose } from '../../domain/pose'
 import {
-  addAnimation, addBone, addPalette, addPart, addVariant, boneOrder, createProject, duplicatePalette, ensureBoneTrack, ensurePartTrack,
+  addAnimation, addBone, addPalette, addPart, addVariant, attachPart, boneOrder, createProject, duplicatePalette, ensureBoneTrack, ensurePartTrack,
   normalizeSpriteName, removeBone, removePalette, removePart, removeVariant, renamePalette, reparentBone, repairPalettes, setActivePalette,
-  setFrameCount, setPartImage, setViews, validate,
+  setFrameCount, setPartImage, setPartSkin, setViews, validate,
 } from '../../domain/project'
+import { addPrimitive, addSolidsPart } from '../../domain/solidsOps'
+import { nearlyEqual } from '../../domain/transform'
+import type { Id, Project } from '../../domain/types'
 
 describe('createProject', () => {
   it('builds a valid starter project', () => {
@@ -193,5 +199,99 @@ describe('palettes', () => {
     repairPalettes(r)
     expect(validate(r)).toEqual([])
     expect(activePalette(r).colors).toHaveLength(16)
+  })
+})
+
+describe('attachPart keeps the part in place', () => {
+  /** Two bones with different positions and rotations, so their projected frames differ. */
+  const twoBones = (): { p: Project; a: Id; b: Id } => {
+    const p = createProject({ canvasSize: 32, viewCount: 8, mirror: true, starter: false })
+    const a = addBone(p, { name: 'a', length: 14, rest: { position: { r: 2, u: 3, f: 1 }, rotation: { r: 5, u: 20, f: 15 } } }).id
+    const b = addBone(p, { name: 'b', length: 9, rest: { position: { r: 11, u: 19, f: -4 }, rotation: { r: -12, u: 40, f: 62 } } }).id
+    return { p, a, b }
+  }
+  const close = (a: number, b: number) => Math.abs(a - b) < 1e-6
+
+  it('a pixel part keeps its canvas matrix in the chosen view, in rest and animated poses', () => {
+    const { p, a, b } = twoBones()
+    const part = addPart(p, { boneId: a, width: 10, height: 12, offset: { x: 3.3, y: -2.2 }, pivot: { x: 4, y: 12 } })
+    part.rotation += 17
+    const anim = addAnimation(p, { name: 'x', frameCount: 2 })
+    ensureBoneTrack(anim, b).rotation.push({ frame: 1, value: { r: 0, u: 0, f: 30 }, interp: 'linear' })
+    for (const view of [1, 3, 7]) {
+      const q = structuredClone(p)
+      const before = partCanvasMatrix(q, null, 0, part.id, view)!
+      expect(attachPart(q, part.id, b, view)).toBe(true)
+      expect(q.parts[part.id].boneId).toBe(b)
+      const after = partCanvasMatrix(q, null, 0, part.id, view)!
+      expect(nearlyEqual(before, after, 1e-6)).toBe(true)
+      // …and it now follows bone b: an animated b moves it.
+      expect(nearlyEqual(after, partCanvasMatrix(q, anim.id, 1, part.id, view)!, 1e-6)).toBe(false)
+      expect(validate(q)).toEqual([])
+    }
+  })
+
+  it('the offset really is re-expressed (not merely the bone id swapped)', () => {
+    const { p, a, b } = twoBones()
+    const part = addPart(p, { boneId: a, width: 8, height: 8 })
+    const q = structuredClone(p)
+    q.parts[part.id].boneId = b
+    const swapped = partCanvasMatrix(q, null, 0, part.id, 1)!
+    attachPart(p, part.id, b, 1)
+    const kept = partCanvasMatrix(p, null, 0, part.id, 1)!
+    expect(nearlyEqual(swapped, kept, 1e-3)).toBe(false)
+  })
+
+  it('a solids part keeps every shape where it was, in every view', () => {
+    const { p, a, b } = twoBones()
+    const part = addSolidsPart(p, a)
+    const prim = addPrimitive(p, part.id, 'cube', [255, 0, 0, 255], 6)
+    prim.position = { r: 4, u: 7, f: -3 }
+    prim.rotation = { r: 12, u: -33, f: 48 }
+    const worldBefore = evalPose(p.skeleton, null, 0)
+    const centreBefore = applyAffine(worldBefore.get(a)!, prim.position)
+    const rotBefore = mul3(rotationOf3(worldBefore.get(a)!), eulerMatrix(prim.rotation))
+    attachPart(p, part.id, b, 3)
+    const world = evalPose(p.skeleton, null, 0).get(b)!
+    const q = p.parts[part.id].solids!.primitives[prim.id]
+    const centreAfter = applyAffine(world, q.position)
+    expect(close(centreAfter.r, centreBefore.r) && close(centreAfter.u, centreBefore.u) && close(centreAfter.f, centreBefore.f)).toBe(true)
+    const rotAfter = mul3(rotationOf3(world), eulerMatrix(q.rotation))
+    for (let i = 0; i < 9; i++) expect(close(rotAfter[i], rotBefore[i])).toBe(true)
+    expect(validate(p)).toEqual([])
+  })
+
+  it('is a no-op for the same bone or a missing one, and drops the new bone from the skin list', () => {
+    const { p, a, b } = twoBones()
+    const part = addPart(p, { boneId: a, width: 8, height: 8 })
+    setPartSkin(p, part.id, { bones: [b] })
+    expect(attachPart(p, part.id, a, 1)).toBe(false)
+    expect(attachPart(p, part.id, 'ghost', 1)).toBe(false)
+    expect(attachPart(p, 'ghost', b, 1)).toBe(false)
+    expect(attachPart(p, part.id, b, 1)).toBe(true)
+    expect(p.parts[part.id].skin).toBeUndefined()
+  })
+
+  it('removeBone re-hangs the removed bone’s parts without moving them', () => {
+    const { p, a, b } = twoBones()
+    const child = addBone(p, { name: 'c', parentId: b, length: 6, rest: { position: { u: 9 }, rotation: { f: -25 } } }).id
+    const part = addPart(p, { boneId: child, width: 6, height: 9, offset: { x: 1.5, y: 2.5 } })
+    const solids = addSolidsPart(p, b)
+    const prim = addPrimitive(p, solids.id, 'sphere', [0, 255, 0, 255], 5)
+    prim.position = { r: 2, u: 3, f: 4 }
+    const before = partCanvasMatrix(p, null, 0, part.id, 2)!
+    const centreBefore = applyAffine(evalPose(p.skeleton, null, 0).get(b)!, prim.position)
+
+    removeBone(p, child, 2)                 // part → parent b
+    expect(p.parts[part.id].boneId).toBe(b)
+    expect(nearlyEqual(before, partCanvasMatrix(p, null, 0, part.id, 2)!, 1e-6)).toBe(true)
+
+    removeBone(p, b, 2)                     // b was a root: everything falls back to root a
+    expect(p.parts[part.id].boneId).toBe(a)
+    expect(p.parts[solids.id].boneId).toBe(a)
+    expect(nearlyEqual(before, partCanvasMatrix(p, null, 0, part.id, 2)!, 1e-6)).toBe(true)
+    const centreAfter = applyAffine(evalPose(p.skeleton, null, 0).get(a)!, p.parts[solids.id].solids!.primitives[prim.id].position)
+    expect(close(centreAfter.r, centreBefore.r) && close(centreAfter.u, centreBefore.u) && close(centreAfter.f, centreBefore.f)).toBe(true)
+    expect(validate(p)).toEqual([])
   })
 })
