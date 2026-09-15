@@ -29,6 +29,9 @@ const SECTIONS: { title: string; rows: [string, string][] }[] = [
       ['Drag the pink cross', 'Move where the selected part hangs on its bone'],
       ['Pencil in the Bones panel', 'Draw a new bone: press at the root, drag to the tip'],
       ['Drag a timeline key', 'Move it · right-click / long-press deletes it'],
+      ['Click a key · Shift-click', 'Select it · add another to the selection'],
+      ['Multi-select button', 'Tap keys to select them, for touch screens'],
+      ['Ctrl+C · Ctrl+V', 'Copy the selected keys · paste them at the playhead'],
     ],
   },
   {
