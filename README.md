@@ -13,6 +13,7 @@ An editor for animated sprites of characters that live in 3D space and need seve
 - **Exports**: Doom-style PNG names (`NAME` + frame letter + rotation), packed atlas + JSON manifest, individual PNG frames, animated GIF previews (per animation and view plus a turntable).
 - **Projects**: `.tsprite` files (a zip of `project.json` + lossless PNGs, format version 3; older files are upgraded on open), an app library with a recent list, autosave, import of PNGs as parts.
 - **In VS Code**: a `.tsprite` opens in an editor tab through the extension in `vscode/`, saving and undoing the way the rest of the editor does.
+- **Engine runtime**: [`runtime/`](runtime/) is a dependency-free library that plays an exported sprite in someone else's engine — give it the camera direction and the time, it returns the rectangle to cut from the sheet and the feet to hang it from.
 
 ## Conventions
 
@@ -56,6 +57,20 @@ pnpm tauri android build --apk                       # release (see Signing)
 ```
 
 Exports on Android go through the system file picker: choose a zip location (Downloads, Drive, …) and the app writes it there.
+
+### Playing sprites in another engine
+
+[`runtime/`](runtime/README.md) is a small library that turns a camera
+direction and a clock into the frame to draw, from an `Atlas + JSON` export. It
+has no dependencies and no renderer, and its view and timing maths are checked
+against the editor's own across every view count from 1 to 64.
+
+```bash
+cd runtime
+npm install
+npm run build
+npm test
+```
 
 ### VS Code
 

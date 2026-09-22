@@ -1,0 +1,219 @@
+{
+  "animations": [
+    {
+      "fps": 10.0,
+      "frames": [
+        {
+          "index": 0,
+          "views": {
+            "1": "walk/0/v1",
+            "2": "walk/0/v2",
+            "3": "walk/0/v3",
+            "4": "walk/0/v4"
+          }
+        },
+        {
+          "index": 1,
+          "views": {
+            "1": "walk/1/v1",
+            "2": "walk/1/v2",
+            "3": "walk/1/v3",
+            "4": "walk/1/v4"
+          }
+        }
+      ],
+      "loop": true,
+      "name": "walk"
+    }
+  ],
+  "canvas": {
+    "h": 16,
+    "w": 16
+  },
+  "conventions": "angleDeg = camera bearing relative to the character's facing, anticlockwise seen from above; 0 = character faces the camera. pivot is the feet point (bottom centre of the canvas) relative to each trimmed rect, normalised to its size.",
+  "format": "threesprite-atlas",
+  "frames": {
+    "walk/0/v1": {
+      "pivot": {
+        "x": 2.0,
+        "y": 2.8
+      },
+      "rect": {
+        "h": 5,
+        "w": 4,
+        "x": 7,
+        "y": 10
+      },
+      "source": {
+        "h": 5,
+        "w": 4,
+        "x": 0,
+        "y": 2
+      }
+    },
+    "walk/0/v2": {
+      "pivot": {
+        "x": 1.4,
+        "y": 2.1666666666666665
+      },
+      "rect": {
+        "h": 6,
+        "w": 5,
+        "x": 25,
+        "y": 1
+      },
+      "source": {
+        "h": 6,
+        "w": 5,
+        "x": 1,
+        "y": 3
+      }
+    },
+    "walk/0/v3": {
+      "pivot": {
+        "x": 1.0,
+        "y": 1.7142857142857142
+      },
+      "rect": {
+        "h": 7,
+        "w": 6,
+        "x": 6,
+        "y": 1
+      },
+      "source": {
+        "h": 7,
+        "w": 6,
+        "x": 2,
+        "y": 4
+      }
+    },
+    "walk/0/v4": {
+      "pivot": {
+        "x": 1.25,
+        "y": 1.75
+      },
+      "rect": {
+        "h": 8,
+        "w": 4,
+        "x": 1,
+        "y": 1
+      },
+      "source": {
+        "h": 8,
+        "w": 4,
+        "x": 3,
+        "y": 2
+      }
+    },
+    "walk/1/v1": {
+      "pivot": {
+        "x": 0.8,
+        "y": 2.6
+      },
+      "rect": {
+        "h": 5,
+        "w": 5,
+        "x": 1,
+        "y": 10
+      },
+      "source": {
+        "h": 5,
+        "w": 5,
+        "x": 4,
+        "y": 3
+      }
+    },
+    "walk/1/v2": {
+      "pivot": {
+        "x": 1.3333333333333333,
+        "y": 2.0
+      },
+      "rect": {
+        "h": 6,
+        "w": 6,
+        "x": 18,
+        "y": 1
+      },
+      "source": {
+        "h": 6,
+        "w": 6,
+        "x": 0,
+        "y": 4
+      }
+    },
+    "walk/1/v3": {
+      "pivot": {
+        "x": 1.75,
+        "y": 2.0
+      },
+      "rect": {
+        "h": 7,
+        "w": 4,
+        "x": 13,
+        "y": 1
+      },
+      "source": {
+        "h": 7,
+        "w": 4,
+        "x": 1,
+        "y": 2
+      }
+    },
+    "walk/1/v4": {
+      "pivot": {
+        "x": 8.0,
+        "y": 16.0
+      },
+      "rect": {
+        "h": 1,
+        "w": 1,
+        "x": 12,
+        "y": 10
+      },
+      "source": {
+        "h": 1,
+        "w": 1,
+        "x": 0,
+        "y": 0
+      }
+    }
+  },
+  "image": "HERO.png",
+  "size": {
+    "h": 16,
+    "w": 32
+  },
+  "sprite": "HERO",
+  "version": 1,
+  "views": {
+    "count": 4,
+    "list": [
+      {
+        "angleDeg": 0.0,
+        "index": 1,
+        "mirrorOf": null,
+        "mirrored": false
+      },
+      {
+        "angleDeg": 90.0,
+        "index": 2,
+        "mirrorOf": null,
+        "mirrored": false
+      },
+      {
+        "angleDeg": 180.0,
+        "index": 3,
+        "mirrorOf": null,
+        "mirrored": false
+      },
+      {
+        "angleDeg": 270.0,
+        "index": 4,
+        "mirrorOf": 2,
+        "mirrored": true
+      }
+    ],
+    "mirror": true
+  },
+  "worldHeight": 1.75
+}

@@ -55,3 +55,6 @@ drive-out/
 vscode/out/
 vscode/media/
 vscode/*.vsix
+
+# Engine runtime build output
+runtime/out/

@@ -1,0 +1,38 @@
+{
+  "name": "@threesprite/runtime",
+  "version": "0.1.0",
+  "description": "Play ThreeSprite multi-view sprites in any engine: pick the rotation from the camera direction and the frame from the clock.",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./out/index.js",
+  "types": "./out/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./out/index.d.ts",
+      "default": "./out/index.js"
+    }
+  },
+  "files": [
+    "out",
+    "src",
+    "README.md"
+  ],
+  "keywords": [
+    "sprite",
+    "billboard",
+    "atlas",
+    "animation",
+    "gamedev",
+    "threesprite"
+  ],
+  "scripts": {
+    "build": "tsc -p .",
+    "test": "npm run build && node --test test/*.test.mjs",
+    "fixtures": "cd ../src-tauri && THREESPRITE_WRITE_FIXTURES=1 cargo test --quiet atlas_fixture -- --nocapture"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.8.0"
+  }
+}
