@@ -27,6 +27,8 @@ export default function AppShell() {
   const dialogRef = useRef<Dialog>(null)
   dialogRef.current = dialog
   const [toast, setToast] = useState<Toast | null>(null)
+  /** Name offered by the new-project dialog when a host opened an empty file. */
+  const [newName, setNewName] = useState<string | undefined>()
   const name = useEditor(s => s.doc.name)
   const dirty = useEditor(s => s.dirty)
   useKeyboardShortcuts()
@@ -54,7 +56,9 @@ export default function AppShell() {
   }, [])
 
   // Inside VS Code the host sends the file it wants opened; nothing is restored here.
-  useEffect(() => startVscodeBridge(notify), [notify])
+  // An empty file is a new sprite: ask for its canvas and views, which are fixed once made.
+  const onEmptyFile = useCallback((name: string) => { setNewName(name); setDialog('new') }, [])
+  useEffect(() => startVscodeBridge(notify, onEmptyFile), [notify, onEmptyFile])
 
   // On launch, continue with the most recent project when the fresh document is untouched.
   useEffect(() => {
@@ -80,7 +84,7 @@ export default function AppShell() {
       <Toolbar compact={mobile} onMenu={() => setDialog('menu')} onSettings={() => setDialog('settings')} onHelp={() => setDialog('help')} />
       {mobile ? <MobileLayout /> : <DesktopLayout />}
       {dialog === 'menu' && <ProjectMenu onNew={openNew} onClose={() => setDialog(null)} notify={notify} />}
-      {dialog === 'new' && <NewProjectDialog onClose={() => setDialog(null)} />}
+      {dialog === 'new' && <NewProjectDialog defaultName={newName} onClose={() => { setDialog(null); setNewName(undefined) }} />}
       {dialog === 'settings' && <ProjectSettingsDialog onClose={() => setDialog(null)} />}
       {dialog === 'help' && <HelpDialog onClose={() => setDialog(null)} />}
       <DialogHost />

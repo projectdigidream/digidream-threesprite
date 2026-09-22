@@ -138,3 +138,17 @@ describe('editorStore palettes', () => {
     expect(editorStore.getState().ui.secondary).toEqual([9, 8, 7, 255])
   })
 })
+
+describe('editorStore hosted source', () => {
+  it('a host keeps owning the tab across a project load; an unhosted load resets the source', () => {
+    const s = editorStore.getState()
+    s.setSource({ path: '/w/hero.tsprite', host: 'vscode' })
+    s.loadProject(createProject({ name: 'Fresh', canvasSize: 32 }))
+    expect(editorStore.getState().source).toEqual({ path: '/w/hero.tsprite', host: 'vscode' })
+    expect(editorStore.getState().doc.canvas.size).toBe(32)
+
+    editorStore.getState().setSource({ path: '/desk/local.tsprite' })
+    editorStore.getState().loadProject(createProject({ name: 'Other' }))
+    expect(editorStore.getState().source).toEqual({})
+  })
+})

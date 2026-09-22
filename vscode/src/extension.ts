@@ -13,7 +13,9 @@ export function activate(context: vscode.ExtensionContext): void {
         filters: { 'ThreeSprite project': ['tsprite'] },
       })
       if (!target) return
-      // An empty file: the editor starts a fresh project and the first save fills it in.
+      // An empty file. The editor sees no bytes, asks for the canvas size and
+      // view count (both fixed once a project exists) and writes the result
+      // back straight away, so the placeholder never outlives the setup.
       await vscode.workspace.fs.writeFile(target, new Uint8Array())
       await vscode.commands.executeCommand('vscode.openWith', target, TSpriteEditorProvider.viewType)
     }),

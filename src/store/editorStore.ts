@@ -165,7 +165,9 @@ export const editorStore = createStore<EditorState>()((set, get) => {
     source: {},
 
     loadProject(p) {
-      set(s => ({ doc: p, revision: s.revision + 1, dirty: false, history: { undo: [], redo: [] }, ui: defaultUi(p), source: {} }))
+      // A host that owns the tab keeps owning it whatever is loaded into it:
+      // a new project made inside VS Code still belongs to the file it opened.
+      set(s => ({ doc: p, revision: s.revision + 1, dirty: false, history: { undo: [], redo: [] }, ui: defaultUi(p), source: s.source.host ? s.source : {} }))
     },
 
     setSource(source) {

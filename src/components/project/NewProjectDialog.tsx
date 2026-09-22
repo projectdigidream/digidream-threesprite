@@ -7,11 +7,17 @@ import { useEditor } from '../../store/editorStore'
 
 const SIZES = [16, 24, 32, 48, 64, 96, 128, 256]
 
-export default function NewProjectDialog({ onClose }: { onClose: () => void }) {
+interface Props {
+  onClose: () => void
+  /** Starting name, e.g. taken from the file a host is creating. */
+  defaultName?: string
+}
+
+export default function NewProjectDialog({ onClose, defaultName }: Props) {
   const loadProject = useEditor(s => s.loadProject)
   const dirty = useEditor(s => s.dirty)
-  const [name, setName] = useState('New sprite')
-  const [spriteName, setSpriteName] = useState('SPRT')
+  const [name, setName] = useState(defaultName ?? 'New sprite')
+  const [spriteName, setSpriteName] = useState(defaultName ? normalizeSpriteName(defaultName) : 'SPRT')
   const [size, setSize] = useState(64)
   const [customSize, setCustomSize] = useState('')
   const [views, setViews] = useState(8)

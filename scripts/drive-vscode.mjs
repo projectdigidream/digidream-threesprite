@@ -176,6 +176,55 @@ for (const tab of ['Rig', 'Animate', '3D', 'Export']) {
 }
 expect(await page.locator('.export__format').count() > 0, 'the export panel renders under the policy')
 
+// 11. New Sprite Project: the command opens an empty file
+{
+  const fresh = await (await browser.newContext({ viewport: { width: 1280, height: 820 } })).newPage()
+  fresh.on('pageerror', e => errors.push(`new-sprite pageerror: ${e.message}`))
+  fresh.on('console', m => { if (m.type() === 'error' && ownRequest(m.location()?.url ?? '')) errors.push(`new-sprite console: ${m.text()}`) })
+  await fresh.addInitScript(() => {
+    window.__THREESPRITE_TEST__ = true
+    window.__hostInbox = []
+    window.acquireVsCodeApi = () => ({ postMessage: m => { window.__hostInbox.push(m) }, getState: () => undefined, setState: () => {} })
+  })
+  await fresh.goto(origin, { waitUntil: 'networkidle' })
+  await fresh.waitForSelector('.pixel-canvas__surface', { timeout: 20000 })
+  const sent = () => fresh.evaluate(() => window.__hostInbox.map(m => m.type))
+
+  await fresh.evaluate(() => window.postMessage({ type: 'init', body: '', path: '/tmp/hero.tsprite' }, '*'))
+  const dialog = fresh.locator('[role="dialog"][aria-label="New project"]')
+  await dialog.waitFor({ timeout: 5000 }).catch(() => {})
+  expect(await dialog.count() === 1, 'an empty file opens the new-sprite setup')
+  const nameField = dialog.locator('input').first()
+  expect(await nameField.inputValue() === 'hero', `the project is named after the file (${await nameField.inputValue()})`)
+  expect(await dialog.locator('input[maxlength="4"]').inputValue() === 'HERO', 'the sprite code follows the name')
+  expect(!(await sent()).includes('error'), 'no error is reported for the empty file')
+  await fresh.screenshot({ path: join(outDir, 'vscode-03-new-sprite.png') })
+
+  // both chip rows hold a 16 and a 32, so each click is scoped to its own field
+  await dialog.locator('.field', { hasText: 'Canvas size' }).locator('.chip', { hasText: /^32$/ }).click()
+  await dialog.locator('.field', { hasText: 'rotation angles' }).locator('.chip', { hasText: /^16$/ }).click()
+  await dialog.locator('button.primary', { hasText: 'Create' }).click()
+  await fresh.waitForTimeout(400)
+
+  const types = await sent()
+  const tail = types.slice(types.indexOf('ready') + 1)
+  expect(tail.join(',') === 'edit,save', `the new project is written straight away (${tail.join(', ')})`)
+  const made = await fresh.evaluate(() => {
+    const s = window.__editorStore.getState()
+    return { name: s.doc.name, size: s.doc.canvas.size, views: s.doc.views.count, host: s.source.host, path: s.source.path }
+  })
+  expect(made.size === 32 && made.views === 16 && made.name === 'hero', `it has the chosen canvas and views (${made.size}px, ${made.views} views)`)
+  expect(made.host === 'vscode' && made.path === '/tmp/hero.tsprite', 'it still belongs to the file that was opened')
+
+  // what VS Code writes on that save is a real project
+  await fresh.evaluate(() => window.postMessage({ type: 'getBytes', id: 1 }, '*'))
+  await fresh.waitForTimeout(500)
+  const b = await fresh.evaluate(() => window.__hostInbox.find(m => m.type === 'bytes')?.body ?? '')
+  const z = Buffer.from(b, 'base64')
+  expect(z.length > 500 && z[0] === 0x50 && z[1] === 0x4b, `the saved file is a ${z.length}-byte project, not the empty placeholder`)
+  await fresh.context().close()
+}
+
 await browser.close()
 server.close()
 if (errors.length) { console.error(`\n${errors.length} problem(s):\n` + errors.join('\n')); process.exit(1) }

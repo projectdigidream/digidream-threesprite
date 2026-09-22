@@ -29,8 +29,18 @@ its first argument as a version number.
 ## Try it
 
 Open this folder in VS Code and press `F5` to launch an Extension Development
-Host, then open any `.tsprite` file in it. **ThreeSprite: New Sprite Project**
-in the command palette creates an empty one.
+Host, then open any `.tsprite` file in it.
+
+To start a sprite from scratch, run **ThreeSprite: New Sprite Project** from
+the command palette. It asks where to save the file, opens it, and shows the
+same setup as the app's own New project: name, sprite code, canvas size and
+number of views. Canvas size cannot change once a project exists, which is why
+it asks up front. The project is written to the file as soon as you press
+Create. Cancel it and the file stays empty; opening it again brings the setup
+back.
+
+A window that was already open when you installed the extension will not list
+the command until it reloads: run **Developer: Reload Window**.
 
 ## Package and install
 
