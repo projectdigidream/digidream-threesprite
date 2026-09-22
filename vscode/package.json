@@ -2,7 +2,7 @@
   "name": "threesprite-vscode",
   "displayName": "ThreeSprite",
   "description": "Edit animated multi-view sprite projects (.tsprite) in an editor tab.",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "publisher": "digidream",
   "private": true,
   "license": "MIT",
