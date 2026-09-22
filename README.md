@@ -10,7 +10,7 @@ An editor for animated sprites of characters that live in 3D space and need seve
 - **Palettes**: a project holds any number of named palettes and one is active in the Draw tab. The palette editor switches, creates, duplicates, renames and deletes them; adds, removes, reorders and sorts swatches; edits a swatch with a hex field, RGB sliders or the system picker — and can recolour every pixel painted with that swatch, live while you drag, as one undo step. Presets (DawnBringer 16/32, PICO-8, Sweetie 16, Endesga 32, Game Boy, greyscale), "add colours from artwork", and import/export of Lospec/Aseprite `.hex`, GIMP `.gpl` and JASC `.pal` files.
 - **Timeline**: per-bone rotation/move/scale keys, per-part visibility and variant keys, linear / ease / step interpolation, scrubbing, drag-to-move keys. Click a keyframe to select it and shift or ⌘/Ctrl-click (or the multi-select toggle, for touch) to pick several, then copy and paste them at another frame with the transport buttons or ⌘/Ctrl+C and V; the spacing between copied frames and their interpolation come along.
 - **3D studio**: the sprite as a billboard on a ground grid; orbit the camera and the view swaps exactly as a game picks rotations from the camera bearing. "Spread" shows every facing at once. On desktop the studio shows drawing canvases for every view beside the 3D scene; on a phone it stacks 3D over the drawing canvas (portrait) or side by side (landscape).
-- **Exports**: Doom-style PNG names (`NAME` + frame letter + rotation), packed atlas + JSON manifest, individual PNG frames, animated GIF previews (per animation and view plus a turntable).
+- **Exports**: Doom-style PNG names (`NAME` + frame letter + rotation), packed atlas + JSON manifest, individual PNG frames, animated GIF previews (per animation and view plus a turntable). All four work on every platform: the desktop and Android builds encode in Rust, the browser and VS Code builds in TypeScript, and both write the same sheets and manifests.
 - **Projects**: `.tsprite` files (a zip of `project.json` + lossless PNGs, format version 3; older files are upgraded on open), an app library with a recent list, autosave, import of PNGs as parts.
 - **In VS Code**: a `.tsprite` opens in an editor tab through the extension in `vscode/`, saving and undoing the way the rest of the editor does.
 - **Engine runtime**: [`runtime/`](runtime/) is a dependency-free library that plays an exported sprite in someone else's engine — give it the camera direction and the time, it returns the rectangle to cut from the sheet and the feet to hang it from.
@@ -97,7 +97,7 @@ or from **Extensions → … → Install from VSIX…**.
 
 Preview locally with `pnpm exec vite preview --config vite.config.web.ts`, or check a sub-path deployment with `node scripts/drive-webhost.mjs <url>`.
 
-What the browser version does and does not do: everything in the editor is the same; projects live in that browser's IndexedDB (use Project → Save as… to get a `.tsprite` file out), and of the exports only Doom-style PNGs and PNG frames are available (as zip downloads); atlas + JSON and GIF need the desktop or Android app.
+What the browser version does and does not do: everything in the editor is the same, and all four export formats work, arriving as a zip download. The only real difference is where projects live: that browser's IndexedDB, so use Project → Save as… to get a `.tsprite` file out.
 
 ### Signing (Android release)
 

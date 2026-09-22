@@ -176,7 +176,62 @@ for (const tab of ['Rig', 'Animate', '3D', 'Export']) {
 }
 expect(await page.locator('.export__format').count() > 0, 'the export panel renders under the policy')
 
-// 11. New Sprite Project: the command opens an empty file
+// 11. exporting every format from the webview, with no Rust behind it
+{
+  const { unzipSync } = await import('fflate')
+  const { TSpriteSheet } = await import(pathToFileURL(join(repo, 'runtime', 'out', 'index.js')).href)
+
+  const exportZip = async (formatTitle) => {
+    await page.locator('.tab:has-text("Export")').first().click()
+    await page.waitForTimeout(250)
+    await page.locator(`.export__format:has-text("${formatTitle}")`).click()
+    await page.waitForTimeout(400)
+    const [download] = await Promise.all([
+      page.waitForEvent('download', { timeout: 60000 }),
+      page.locator('button:has-text("Download zip")').click(),
+    ])
+    const path = join(outDir, await download.suggestedFilename())
+    await download.saveAs(path)
+    return unzipSync(readFileSync(path))
+  }
+
+  const atlas = await exportZip('Atlas + JSON')
+  const names = Object.keys(atlas)
+  expect(names.length === 2 && names.some(n => n.endsWith('.png')) && names.some(n => n.endsWith('.json')),
+    `the atlas export writes a sheet and a manifest (${names.join(', ')})`)
+  const manifest = JSON.parse(new TextDecoder().decode(atlas[names.find(n => n.endsWith('.json'))]))
+  expect(manifest.format === 'threesprite-atlas', 'the manifest is a ThreeSprite atlas')
+
+  // the engine library reads what the webview just wrote
+  const sheet = TSpriteSheet.parse(manifest)
+  expect(sheet.viewCount === 8, `the sheet keeps all ${sheet.viewCount} views`)
+  const anim = sheet.animationNames[0]
+  const seen = new Set()
+  for (let v = 0; v < sheet.viewCount; v++) {
+    const r = sheet.resolve({ animation: anim, frame: 3, relative: v / sheet.viewCount })
+    expect(!!r && r.view === v + 1, `view ${v + 1} resolves`)
+    if (r) seen.add(r.key)
+  }
+  expect(seen.size === sheet.viewCount, 'each rotation is its own picture in the sheet')
+  const first = sheet.resolve({ animation: anim, time: 0, relative: 0 })
+  expect(first.rect.w > 0 && first.rect.h > 0, `a frame has a real rectangle (${first.rect.w}×${first.rect.h})`)
+  expect(first.pivot.y > 0, `the feet pivot came through (${first.pivot.y.toFixed(1)}px)`)
+  const png = atlas[names.find(n => n.endsWith('.png'))]
+  expect(png[0] === 0x89 && png[1] === 0x50, `the sheet is a ${png.length}-byte PNG`)
+
+  const gifs = await exportZip('GIF previews')
+  const gifNames = Object.keys(gifs)
+  expect(gifNames.length > 1 && gifNames.every(n => n.endsWith('.gif')), `the GIF export writes ${gifNames.length} files`)
+  expect(gifNames.some(n => n.includes('turntable')), 'including a turntable')
+  for (const n of gifNames) {
+    const header = new TextDecoder().decode(gifs[n].subarray(0, 6))
+    expect(header === 'GIF89a', `${n} is a GIF89a`)
+    break
+  }
+  await page.screenshot({ path: join(outDir, 'vscode-04-export.png') })
+}
+
+// 12. New Sprite Project: the command opens an empty file
 {
   const fresh = await (await browser.newContext({ viewport: { width: 1280, height: 820 } })).newPage()
   fresh.on('pageerror', e => errors.push(`new-sprite pageerror: ${e.message}`))

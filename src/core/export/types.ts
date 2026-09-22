@@ -11,7 +11,7 @@ export const FORMAT_INFO: Record<ExportFormat, { title: string; blurb: string; b
   atlas: {
     title: 'Atlas + JSON',
     blurb: 'One packed sheet with trimmed frames plus a JSON manifest: rects, feet pivots, animations, and every view with its angle. For Unity, Godot, Phaser or your own engine.',
-    browser: false,
+    browser: true,
   },
   pngs: {
     title: 'PNG frames',
@@ -21,7 +21,7 @@ export const FORMAT_INFO: Record<ExportFormat, { title: string; blurb: string; b
   gif: {
     title: 'GIF previews',
     blurb: 'An animated GIF per animation and view, plus a turntable GIF cycling every view of the first frame.',
-    browser: false,
+    browser: true,
   },
 }
 

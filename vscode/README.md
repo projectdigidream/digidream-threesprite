@@ -76,7 +76,9 @@ forwarded into the editor's own history.
 
 Inside VS Code the app hides what the tab already provides: New, Open, Save as
 and the recent list go, and its autosave stands down in favour of VS Code's
-backups. Export and PNG import stay.
+backups. Export and PNG import stay, and all four export formats work here —
+the atlas, the GIFs and both PNG layouts are encoded in TypeScript, so nothing
+needs the desktop app.
 
 ## Known limits
 
