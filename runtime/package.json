@@ -11,11 +11,16 @@
     ".": {
       "types": "./out/index.d.ts",
       "default": "./out/index.js"
+    },
+    "./tsprite": {
+      "types": "./out/tsprite.d.ts",
+      "default": "./out/tsprite.js"
     }
   },
   "files": [
     "out",
     "src",
+    "bin",
     "README.md"
   ],
   "keywords": [
@@ -27,12 +32,19 @@
     "threesprite"
   ],
   "scripts": {
-    "build": "tsc -p .",
+    "build": "tsc -p . && node scripts/build-tsprite.mjs",
     "test": "npm run build && node --test test/*.test.mjs",
     "fixtures": "cd ../src-tauri && THREESPRITE_WRITE_FIXTURES=1 cargo test --quiet atlas_fixture -- --nocapture"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
     "typescript": "^5.8.0"
+  },
+  "dependencies": {
+    "fast-png": "^8.0.0",
+    "fflate": "^0.8.3"
+  },
+  "bin": {
+    "tsprite-atlas": "./bin/tsprite-atlas.mjs"
   }
 }

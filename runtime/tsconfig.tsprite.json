@@ -1,0 +1,19 @@
+{
+  "//": "Declarations for the bundled .tsprite entry. esbuild does the bundling; this only emits its types, with bundler resolution so the editor's extensionless imports resolve.",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "emitDeclarationOnly": true,
+    "declarationMap": false,
+    "sourceMap": false,
+    "verbatimModuleSyntax": false,
+    "noUnusedLocals": false,
+    "rootDir": "..",
+    "outDir": "out-types"
+  },
+  "include": [
+    "src/tsprite.ts"
+  ],
+  "exclude": []
+}

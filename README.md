@@ -13,7 +13,7 @@ An editor for animated sprites of characters that live in 3D space and need seve
 - **Exports**: Doom-style PNG names (`NAME` + frame letter + rotation), packed atlas + JSON manifest, individual PNG frames, animated GIF previews (per animation and view plus a turntable). All four work on every platform: the desktop and Android builds encode in Rust, the browser and VS Code builds in TypeScript, and both write the same sheets and manifests.
 - **Projects**: `.tsprite` files (a zip of `project.json` + lossless PNGs, format version 3; older files are upgraded on open), an app library with a recent list, autosave, import of PNGs as parts.
 - **In VS Code**: a `.tsprite` opens in an editor tab through the extension in `vscode/`, saving and undoing the way the rest of the editor does.
-- **Engine runtime**: [`runtime/`](runtime/) is a dependency-free library that plays an exported sprite in someone else's engine — give it the camera direction and the time, it returns the rectangle to cut from the sheet and the feet to hang it from.
+- **Engine runtime**: [`runtime/`](runtime/) plays a sprite in someone else's engine — give it the camera direction and the time, it returns the rectangle to cut from the sheet and the feet to hang it from. It reads an atlas export, or a `.tsprite` directly, and `npx tsprite-atlas hero.tsprite` converts one from the command line for engines that would rather import two files.
 
 ## Conventions
 
@@ -61,9 +61,10 @@ Exports on Android go through the system file picker: choose a zip location (Dow
 ### Playing sprites in another engine
 
 [`runtime/`](runtime/README.md) is a small library that turns a camera
-direction and a clock into the frame to draw, from an `Atlas + JSON` export. It
-has no dependencies and no renderer, and its view and timing maths are checked
-against the editor's own across every view count from 1 to 64.
+direction and a clock into the frame to draw. It reads an `Atlas + JSON` export,
+or opens a `.tsprite` directly and composes it (the same rasterizer the editor
+uses, so the two cannot drift). Its view and timing maths are checked against
+the editor's own across every view count from 1 to 64.
 
 ```bash
 cd runtime

@@ -28,6 +28,8 @@ export interface AtlasInput {
 
 export interface AtlasResult {
   png: Uint8Array
+  /** The packed sheet as raw RGBA, for callers uploading a texture rather than writing a file. */
+  rgba: Uint8ClampedArray
   /** The manifest, pretty-printed the way the Rust exporter writes it. */
   json: string
   manifest: unknown
@@ -158,5 +160,5 @@ export function buildAtlas(input: AtlasInput): AtlasResult {
     })),
   }
 
-  return { png, json: JSON.stringify(manifest, null, 2), manifest, width, height, warnings }
+  return { png, rgba: sheet, json: JSON.stringify(manifest, null, 2), manifest, width, height, warnings }
 }

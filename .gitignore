@@ -58,3 +58,4 @@ vscode/*.vsix
 
 # Engine runtime build output
 runtime/out/
+runtime/out-types/

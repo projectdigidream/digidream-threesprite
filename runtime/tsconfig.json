@@ -3,7 +3,9 @@
     "target": "ES2020",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "lib": ["ES2020"],
+    "lib": [
+      "ES2020"
+    ],
     "outDir": "out",
     "rootDir": "src",
     "declaration": true,
@@ -18,5 +20,11 @@
     "skipLibCheck": true,
     "verbatimModuleSyntax": true
   },
-  "include": ["src"]
+  "include": [
+    "src"
+  ],
+  "exclude": [
+    "src/tsprite.ts"
+  ],
+  "//": "src/tsprite.ts is excluded: it reaches into the editor source and is bundled by scripts/build-tsprite.mjs, with its types emitted by tsconfig.tsprite.json."
 }

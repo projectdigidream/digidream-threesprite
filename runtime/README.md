@@ -4,15 +4,21 @@ Plays ThreeSprite sprites in someone else's engine. Given where the camera is
 and how far into an animation you are, it tells you which rectangle to cut from
 the sheet and where the character's feet sit inside it.
 
-No dependencies, no renderer, no opinion about your game loop. Around 300 lines,
-so porting it to a language this package cannot reach is an afternoon: see
-[Porting](#porting).
+The player itself has no dependencies, no renderer and no opinion about your
+game loop. Around 300 lines, so porting it to a language this package cannot
+reach is an afternoon: see [Porting](#porting).
 
 ## What it needs
 
-Export a project as **Atlas + JSON**. That writes one packed sheet plus a
-manifest describing every frame of every rotation. Mirrored views are written as
-real pictures, so nothing has to be flipped while drawing.
+Either of two things:
+
+- An **Atlas + JSON** export: one packed sheet plus a manifest describing every
+  frame of every rotation. This is what a shipping game should use.
+- A **`.tsprite` project**, loaded directly. See
+  [Loading a .tsprite](#loading-a-tsprite).
+
+Mirrored views are real pictures in the sheet either way, so nothing has to be
+flipped while drawing.
 
 ## Use it
 
@@ -88,6 +94,47 @@ const r = sheet.resolve({ animation: 'attack', frame: head.frame, facing, bearin
 if (head.finished) actor.state = 'idle'
 ```
 
+## Loading a .tsprite
+
+`@threesprite/runtime/tsprite` opens a project file with no export step. It
+does what the editor does when exporting: composes every frame of every
+rotation from the 3D rig, the skinned parts and the solids, then trims and packs
+them into one sheet.
+
+```js
+import { loadTsprite } from '@threesprite/runtime/tsprite'
+
+const { sheet, rgba, width, height } = loadTsprite(await readFile('hero.tsprite'))
+const texture = uploadRGBA(rgba, width, height)      // or use the .png field
+const r = sheet.resolve({ animation: 'walk', time, facing, bearing })
+```
+
+`sheet` is the same object the exported manifest gives, so play-time code does
+not change. `inspectTsprite(bytes)` reads the name, canvas, views and animation
+list without composing anything.
+
+This entry point is heavier than the player and is a separate import for that
+reason: it carries the editor's rasterizer, a zip reader and a PNG decoder
+(`fflate` and `fast-png`), and the work happens when the sprite loads — about a
+second for a few hundred frames. Prefer the plain export for a shipping game
+and this for tools, jams and editors that would rather not have a build step.
+
+`loadTsprite(bytes, { animations: ['walk'], pow2: true, onProgress })` narrows
+what is composed, rounds the sheet height up to a power of two, and reports
+progress.
+
+## Converting on the command line
+
+For engines this package cannot reach, the same conversion runs as a command
+and writes the two files an importer wants:
+
+```bash
+npx tsprite-atlas hero.tsprite -o assets/
+npx tsprite-atlas hero.tsprite --list
+```
+
+That needs no editor and no desktop app, so it drops into an asset pipeline.
+
 ## Other things it will tell you
 
 - `sheet.animationNames`, `sheet.animation(name)` — frame rate, frame count,
@@ -112,10 +159,14 @@ The tests run against `test/fixtures/sample-atlas.json`, which is written by the
 editor's real Rust exporter rather than typed out by hand. Regenerate it with
 `npm run fixtures` after changing the export format.
 
-The editor's own suite additionally checks that this library and the editor
-agree on view selection, frame timing and ground bearings, across every view
-count from 1 to 64. That test lives in the editor at
-`src/__tests__/domain/runtimeParity.test.ts`.
+The loader's tests read `test/fixtures/sample.tsprite`, a project the editor's
+own suite saves.
+
+The editor's suite additionally checks that this library and the editor agree on
+view selection, frame timing and ground bearings, across every view count from 1
+to 64 (`src/__tests__/domain/runtimeParity.test.ts`), and that the sheet built
+for a direct load is the same one the Rust exporter writes
+(`src/__tests__/core/atlasParity.test.ts`).
 
 ## Porting
 
