@@ -1,0 +1,57 @@
+{
+  "name": "threesprite-vscode",
+  "displayName": "ThreeSprite",
+  "description": "Edit animated multi-view sprite projects (.tsprite) in an editor tab.",
+  "version": "0.1.0",
+  "publisher": "digidream",
+  "private": true,
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.84.0"
+  },
+  "categories": [
+    "Visualization",
+    "Other"
+  ],
+  "keywords": [
+    "sprite",
+    "pixel art",
+    "animation",
+    "gamedev"
+  ],
+  "main": "./out/extension.js",
+  "activationEvents": [],
+  "contributes": {
+    "customEditors": [
+      {
+        "viewType": "threesprite.editor",
+        "displayName": "ThreeSprite",
+        "selector": [
+          {
+            "filenamePattern": "*.tsprite"
+          }
+        ],
+        "priority": "default"
+      }
+    ],
+    "commands": [
+      {
+        "command": "threesprite.newProject",
+        "title": "New Sprite Project",
+        "category": "ThreeSprite"
+      }
+    ]
+  },
+  "scripts": {
+    "build:app": "node scripts/copy-app.mjs",
+    "compile": "tsc -p .",
+    "build": "npm run build:app && npm run compile",
+    "test": "npm run compile && node --test test/*.test.mjs",
+    "package": "npm run build && npx --yes @vscode/vsce package --no-dependencies --out threesprite.vsix"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/vscode": "^1.84.0",
+    "typescript": "^5.8.0"
+  }
+}

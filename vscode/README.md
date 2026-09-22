@@ -1,0 +1,61 @@
+# ThreeSprite for VS Code
+
+Opens `.tsprite` projects in an editor tab. Click a sprite project in the
+explorer and the full ThreeSprite editor comes up: draw the views, rig the
+skeleton, animate it, watch it in the 3D studio and export sheets, without
+leaving the window.
+
+The file belongs to VS Code. `Ctrl`/`Cmd`+`S` writes it, the tab shows the
+usual dirty dot, unsaved work survives a restart through VS Code's hot exit,
+and **File → Revert File** reloads from disk.
+
+## Build
+
+```bash
+cd vscode
+npm install
+npm run build          # builds the web bundle into media/ and compiles the extension
+```
+
+`npm run build:app -- --no-build` skips the web build and only copies an
+existing `dist-web/`.
+
+## Try it
+
+Open this folder in VS Code and press `F5` to launch an Extension Development
+Host, then open any `.tsprite` file in it. **ThreeSprite: New Sprite Project**
+in the command palette creates an empty one.
+
+## Package and install
+
+```bash
+npm run package                          # writes threesprite.vsix
+code --install-extension threesprite.vsix
+```
+
+## How it fits together
+
+`media/` holds the ordinary browser build of the app. The extension wraps its
+`index.html` for the webview: a `<base>` element so the bundle's lazily loaded
+chunks resolve against the extension folder, a content-security policy, and a
+per-load nonce on the scripts it ships with.
+
+The live project lives in the webview. The extension reads the file once and
+sends it over, then asks for bytes back whenever it needs to write, so a
+pencil stroke costs one message rather than re-zipping the project. Edits are
+reported so VS Code can mark the tab dirty, and its undo and redo are
+forwarded into the editor's own history.
+
+Inside VS Code the app hides what the tab already provides: New, Open, Save as
+and the recent list go, and its autosave stands down in favour of VS Code's
+backups. Export and PNG import stay.
+
+## Known limits
+
+- One tab per file. VS Code reveals the open tab rather than opening a second
+  copy, because the project lives in the webview and two copies would drift.
+- Undo driven from the app's own toolbar does not pop VS Code's stack, so
+  after mixing the two, redo can run out early. Each `Ctrl`+`Z` still undoes
+  one step.
+- The extension runs in the desktop extension host. It has not been tried in
+  vscode.dev or a remote workspace.

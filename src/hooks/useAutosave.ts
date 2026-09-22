@@ -1,13 +1,18 @@
 import { useEffect } from 'react'
 import { autosaveNow } from '../core/io/projectActions'
+import { isVscode } from '../core/platform'
 import { editorStore } from '../store/editorStore'
 
 /**
  * Debounced autosave into the library after edits, plus an immediate flush
  * when the page is hidden (Android backgrounding, tab switch, window close).
+ *
+ * Off inside VS Code: the document belongs to the editor tab there, and VS
+ * Code keeps its own hot-exit backup of unsaved changes.
  */
 export function useAutosave(delayMs = 2000): void {
   useEffect(() => {
+    if (isVscode()) return
     let timer = 0
     let lastRevision = editorStore.getState().revision
     const unsub = editorStore.subscribe(s => {

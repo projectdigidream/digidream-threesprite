@@ -6,6 +6,9 @@ export default defineConfig({
   esbuild: { tsconfigRaw: { compilerOptions: {} } },
   test: {
     typecheck: { tsconfig: './tsconfig.test.json' },
+    // The VS Code extension is a separate package with its own runner
+    // (`npm test` in vscode/, on node:test against its compiled output).
+    include: ['src/**/*.{test,spec}.{ts,tsx}'],
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./src/__tests__/setup.ts'],

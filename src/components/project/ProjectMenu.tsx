@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { getLibrary, type RecentEntry } from '../../core/io/library'
 import { importPngAsPart, openProjectFromDisk, openRecent, removeFromLibrary, saveProject, saveProjectAs } from '../../core/io/projectActions'
-import { isTauri } from '../../core/platform'
+import { isTauri, isVscode } from '../../core/platform'
 import { isTypingTarget } from '../../hooks/useKeyboardShortcuts'
 import { askConfirm } from '../../core/ui/dialogs'
 import { useEditor } from '../../store/editorStore'
@@ -20,8 +20,11 @@ export default function ProjectMenu({ onNew, onClose, notify }: Props) {
   const docId = useEditor(s => s.doc.id)
   const [recent, setRecent] = useState<RecentEntry[]>([])
   const tauri = isTauri()
+  // Inside VS Code the tab is the file: opening, creating and saving elsewhere
+  // belong to the editor, not to this menu.
+  const hosted = isVscode()
 
-  useEffect(() => { getLibrary().list().then(setRecent).catch(() => setRecent([])) }, [])
+  useEffect(() => { if (!hosted) getLibrary().list().then(setRecent).catch(() => setRecent([])) }, [hosted])
 
   const guard = async () => !dirty || (await askConfirm('Discard unsaved changes in the current project?', { okLabel: 'Discard', danger: true }))
 
@@ -38,12 +41,12 @@ export default function ProjectMenu({ onNew, onClose, notify }: Props) {
   return (
     <div className="menu-backdrop" onClick={onClose}>
       <div className="menu" onClick={e => e.stopPropagation()} role="menu">
-        <button className="menu__item" onClick={() => { onClose(); onNew() }}><Icon name="new" size={16} /> New project… <kbd>Ctrl N</kbd></button>
-        <button className="menu__item" onClick={async () => { if (await guard()) run(openProjectFromDisk) }}><Icon name="folder" size={16} /> Open… <kbd>Ctrl O</kbd></button>
-        <button className="menu__item" onClick={() => run(saveProject, 'Saved')}><Icon name="save" size={16} /> Save <kbd>Ctrl S</kbd></button>
-        <button className="menu__item" onClick={() => run(saveProjectAs, 'Saved')}><Icon name="export" size={16} /> {tauri ? 'Save as…' : 'Download project…'}</button>
+        {!hosted && <button className="menu__item" onClick={() => { onClose(); onNew() }}><Icon name="new" size={16} /> New project… <kbd>Ctrl N</kbd></button>}
+        {!hosted && <button className="menu__item" onClick={async () => { if (await guard()) run(openProjectFromDisk) }}><Icon name="folder" size={16} /> Open… <kbd>Ctrl O</kbd></button>}
+        <button className="menu__item" onClick={() => run(saveProject, hosted ? undefined : 'Saved')}><Icon name="save" size={16} /> Save <kbd>Ctrl S</kbd></button>
+        {!hosted && <button className="menu__item" onClick={() => run(saveProjectAs, 'Saved')}><Icon name="export" size={16} /> {tauri ? 'Save as…' : 'Download project…'}</button>}
         <button className="menu__item" onClick={() => run(importPngAsPart, 'Imported as a new part')}><Icon name="layers" size={16} /> Import PNG as part…</button>
-        <div className="menu__meta">{source.path ? source.path : 'Stored in the app library'}</div>
+        <div className="menu__meta">{hosted ? (source.path ?? 'Open in VS Code') : source.path ? source.path : 'Stored in the app library'}</div>
         {recent.length > 0 && (
           <>
             <div className="menu__header">Recent</div>
@@ -74,10 +77,11 @@ export function useFileShortcuts(onNew: () => void, notify: (msg: string, kind?:
       const mod = e.metaKey || e.ctrlKey
       if (!mod) return
       const k = e.key.toLowerCase()
+      const hosted = isVscode()
       try {
-        if (k === 's') { e.preventDefault(); if (e.shiftKey) await saveProjectAs(); else { await saveProject(); notify('Saved') } }
-        else if (k === 'o') { e.preventDefault(); await openProjectFromDisk() }
-        else if (k === 'n') { e.preventDefault(); onNew() }
+        if (k === 's') { e.preventDefault(); if (e.shiftKey && !hosted) await saveProjectAs(); else { await saveProject(); if (!hosted) notify('Saved') } }
+        else if (k === 'o' && !hosted) { e.preventDefault(); await openProjectFromDisk() }
+        else if (k === 'n' && !hosted) { e.preventDefault(); onNew() }
       } catch (err) {
         notify(err instanceof Error ? err.message : String(err), 'error')
       }

@@ -50,3 +50,8 @@ src-tauri/gen/schemas/
 
 # smoke-driver output
 drive-out/
+
+# VS Code extension build output (media/ is the copied web bundle)
+vscode/out/
+vscode/media/
+vscode/*.vsix

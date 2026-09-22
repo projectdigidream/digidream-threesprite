@@ -12,6 +12,7 @@ An editor for animated sprites of characters that live in 3D space and need seve
 - **3D studio**: the sprite as a billboard on a ground grid; orbit the camera and the view swaps exactly as a game picks rotations from the camera bearing. "Spread" shows every facing at once. On desktop the studio shows drawing canvases for every view beside the 3D scene; on a phone it stacks 3D over the drawing canvas (portrait) or side by side (landscape).
 - **Exports**: Doom-style PNG names (`NAME` + frame letter + rotation), packed atlas + JSON manifest, individual PNG frames, animated GIF previews (per animation and view plus a turntable).
 - **Projects**: `.tsprite` files (a zip of `project.json` + lossless PNGs, format version 3; older files are upgraded on open), an app library with a recent list, autosave, import of PNGs as parts.
+- **In VS Code**: a `.tsprite` opens in an editor tab through the extension in `vscode/`, saving and undoing the way the rest of the editor does.
 
 ## Conventions
 
@@ -56,6 +57,15 @@ pnpm tauri android build --apk                       # release (see Signing)
 
 Exports on Android go through the system file picker: choose a zip location (Downloads, Drive, …) and the app writes it there.
 
+### VS Code
+
+`vscode/` is an extension that opens `.tsprite` files in an editor tab: click a project in the explorer and the whole editor comes up, with `Ctrl`/`Cmd`+`S`, the dirty dot, hot exit and Revert File behaving as they do for any other file. See [vscode/README.md](vscode/README.md).
+
+```bash
+cd vscode && npm install && npm run build   # web bundle into media/, then the extension
+npm run package                             # threesprite.vsix
+```
+
 ### Hosting the web version
 
 `pnpm build:web` writes a plain static site to `dist-web/` (an `index.html` with relative asset URLs), so it runs from a domain root or from any sub-folder; no server code, no headers, no environment variables. Put that folder on any static host:
@@ -76,6 +86,7 @@ Generate a keystore once with `keytool -genkey -v -keystore release.jks -alias k
 
 - **Unit tests**: `pnpm test:run` (rasterizer golden pixels, view-selection property tests, project model, undo, exporters' naming, project file round trip) and `cargo test` (bundle parsing, Doom names, atlas packing, PNG/GIF codecs, sinks).
 - **Browser-driven smoke**: with `pnpm dev` running, `node scripts/drive.mjs out`, `node scripts/drive-studio.mjs out [--mobile] [--landscape]`, `node scripts/drive-export.mjs out` drive the installed Google Chrome headlessly through `playwright-core` and write screenshots.
+- **VS Code webview**: after `npm run build` in `vscode/`, `node scripts/drive-vscode.mjs out` serves the extension's own generated HTML — same content-security policy, same `<base>`, a stubbed `acquireVsCodeApi` — and plays the host conversation against the built bundle: open a file, edit it, ask for bytes, save, undo, redo and revert. It needs no dev server and no VS Code.
 - **Platform self-test**: `THREESPRITE_SELFTEST=1 src-tauri/target/debug/threesprite` runs binary IPC, app-data and export checks inside the real desktop app and prints a `SELFTEST {...}` JSON line (the release binary works the same). On Android, `scripts/android-selftest.sh` boots the emulator headlessly, installs the debug APK, triggers the same self-test through an `AppData/selftest` marker and prints `selftest.json`; `scripts/android-saf-export.sh` then drives Export → Save zip through the system file picker and pulls the zip back from Downloads.
 - **Handedness check**: make an 8-view project with mirror off and draw, in each view `k`, an arrow pointing `(−sin 2π(k−1)/8, +cos 2π(k−1)/8)` on screen (view 1 towards the viewer, 3 left, 5 up, 7 right) plus the digit `k`. In the 3D studio the drawn arrow must follow the facing arrow as the camera orbits, and "Spread 8" must show 1…8 in order.
 

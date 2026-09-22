@@ -62,6 +62,8 @@ export const HISTORY_CAP = 200
 export interface DocSource {
   /** External file path the document is saved to (desktop). Undefined = the app library. */
   path?: string
+  /** Set when an embedding host owns the file, and saving must be handed back to it. */
+  host?: 'vscode'
 }
 
 export interface EditorState {

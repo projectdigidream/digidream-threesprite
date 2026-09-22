@@ -7,6 +7,7 @@ import type { Project } from '../../domain/types'
 import { editorStore } from '../../store/editorStore'
 import { askConfirm } from '../ui/dialogs'
 import { getLibrary, type RecentEntry } from './library'
+import { requestHostSave } from './vscodeHost'
 import { decodeProject, encodeProject, imageFromPng, projectFileName, thumbnail, PROJECT_EXT } from './projectFile'
 import { getSink } from './sink'
 
@@ -21,9 +22,14 @@ function entryFor(p: Project, path?: string): RecentEntry {
   return { id: p.id, name: p.name, modifiedAt: p.meta.modifiedAt, path, thumb }
 }
 
-/** Save to the current source: the external path when there is one, else the library. */
+/** Save to the current source: the host when one owns the file, the external path when there is one, else the library. */
 export async function saveProject(): Promise<RecentEntry> {
   const s = editorStore.getState()
+  if (s.source.host === 'vscode') {
+    // VS Code writes the file and calls back for the bytes; it clears the dirty mark.
+    requestHostSave()
+    return entryFor(s.doc, s.source.path)
+  }
   const bytes = encodeProject(s.doc)
   const lib = getLibrary()
   const entry = entryFor(s.doc, s.source.path)

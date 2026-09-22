@@ -8,6 +8,14 @@ export function isWeb(): boolean {
   return !isTauri()
 }
 
+/**
+ * Running inside the VS Code extension's webview. The host owns the file, so
+ * opening, saving and autosave are handed back to it.
+ */
+export function isVscode(): boolean {
+  return typeof window !== 'undefined' && typeof (window as { acquireVsCodeApi?: unknown }).acquireVsCodeApi === 'function'
+}
+
 export function isAndroid(): boolean {
   return typeof navigator !== 'undefined' && /android/i.test(navigator.userAgent)
 }

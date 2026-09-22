@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { getLibrary } from '../../core/io/library'
 import { openRecent } from '../../core/io/projectActions'
+import { startVscodeBridge } from '../../core/io/vscodeHost'
+import { isVscode } from '../../core/platform'
 import { useAndroidBack } from '../../hooks/useAndroidBack'
 import { useAutosave } from '../../hooks/useAutosave'
 import { useIsMobile } from '../../hooks/useIsMobile'
@@ -51,8 +53,12 @@ export default function AppShell() {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
+  // Inside VS Code the host sends the file it wants opened; nothing is restored here.
+  useEffect(() => startVscodeBridge(notify), [notify])
+
   // On launch, continue with the most recent project when the fresh document is untouched.
   useEffect(() => {
+    if (isVscode()) return
     let cancelled = false
     ;(async () => {
       try {
