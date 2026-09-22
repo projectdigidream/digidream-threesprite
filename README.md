@@ -62,9 +62,15 @@ Exports on Android go through the system file picker: choose a zip location (Dow
 `vscode/` is an extension that opens `.tsprite` files in an editor tab: click a project in the explorer and the whole editor comes up, with `Ctrl`/`Cmd`+`S`, the dirty dot, hot exit and Revert File behaving as they do for any other file. See [vscode/README.md](vscode/README.md).
 
 ```bash
-cd vscode && npm install && npm run build   # web bundle into media/, then the extension
-npm run package                             # threesprite.vsix
+cd vscode
+npm install
+npm run build
+npm run package
 ```
+
+That builds the web bundle into `media/`, compiles the extension and writes
+`threesprite.vsix`. Install it with `code --install-extension threesprite.vsix`,
+or from **Extensions → … → Install from VSIX…**.
 
 ### Hosting the web version
 

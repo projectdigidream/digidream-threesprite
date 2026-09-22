@@ -11,14 +11,20 @@ and **File → Revert File** reloads from disk.
 
 ## Build
 
+Builds the web bundle into `media/`, then compiles the extension:
+
 ```bash
 cd vscode
 npm install
-npm run build          # builds the web bundle into media/ and compiles the extension
+npm run build
 ```
 
 `npm run build:app -- --no-build` skips the web build and only copies an
 existing `dist-web/`.
+
+Keep comments off the end of these command lines. An interactive zsh does not
+strip a trailing `#`, so it arrives as an argument, and `vsce package` reads
+its first argument as a version number.
 
 ## Try it
 
@@ -28,10 +34,22 @@ in the command palette creates an empty one.
 
 ## Package and install
 
+`npm run package` writes `threesprite.vsix`. To install it:
+
 ```bash
-npm run package                          # writes threesprite.vsix
+npm run package
 code --install-extension threesprite.vsix
 ```
+
+On macOS the `code` command is not on `PATH` until you add it: in VS Code run
+**Shell Command: Install 'code' command in PATH** from the command palette.
+Until then, call the binary where it lives:
+
+```bash
+"/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code" --install-extension threesprite.vsix
+```
+
+Or skip the command line: **Extensions → … → Install from VSIX…**.
 
 ## How it fits together
 
