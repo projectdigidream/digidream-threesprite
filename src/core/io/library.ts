@@ -99,7 +99,7 @@ const tauriLibrary: ProjectLibrary = {
 
 // ── Browser: IndexedDB ───────────────────────────────────────────────────────
 
-const DB = 'threesprite'
+const DB = 'prspr-editor'
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB, 1)

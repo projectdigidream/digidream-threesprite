@@ -97,5 +97,5 @@ test('can round the sheet height up to a power of two', () => {
 })
 
 test('refuses something that is not a project', () => {
-  assert.throws(() => loadTsprite(new Uint8Array([1, 2, 3])), /Not a ThreeSprite project/)
+  assert.throws(() => loadTsprite(new Uint8Array([1, 2, 3])), /Not a PrSpr editor project/)
 })

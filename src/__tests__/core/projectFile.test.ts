@@ -81,7 +81,7 @@ describe('project file', () => {
   })
 
   it('rejects non-projects and reports missing images', () => {
-    expect(() => decodeProject(new Uint8Array([1, 2, 3]))).toThrow(/Not a ThreeSprite project/)
+    expect(() => decodeProject(new Uint8Array([1, 2, 3]))).toThrow(/Not a PrSpr editor project/)
   })
 
   it('png helpers convert RGB and grayscale to RGBA', () => {

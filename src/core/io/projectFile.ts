@@ -50,10 +50,10 @@ export function decodeProject(bytes: Uint8Array): DecodedProject {
   try {
     entries = unzipSync(bytes)
   } catch (e) {
-    throw new Error(`Not a ThreeSprite project (zip): ${e instanceof Error ? e.message : String(e)}`)
+    throw new Error(`Not a PrSpr editor project (zip): ${e instanceof Error ? e.message : String(e)}`)
   }
   const jsonBytes = entries['project.json']
-  if (!jsonBytes) throw new Error('Not a ThreeSprite project: project.json missing')
+  if (!jsonBytes) throw new Error('Not a PrSpr editor project: project.json missing')
   const parsed = JSON.parse(new TextDecoder().decode(jsonBytes)) as { formatVersion: number }
   const warnings: string[] = []
   if (parsed.formatVersion === 1) {

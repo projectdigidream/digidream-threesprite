@@ -10,14 +10,14 @@ import { editorStore } from '../store/editorStore'
 export function useAndroidBack(closeDialog: () => boolean): void {
   useEffect(() => {
     if (!isAndroid()) return
-    history.pushState({ threesprite: 1 }, '')
+    history.pushState({ prspr: 1 }, '')
     const onPop = () => {
       const handled = closeDialog()
       if (!handled) {
         const s = editorStore.getState()
         if (s.ui.mode !== 'draw') s.setUi({ mode: 'draw', playing: false })
       }
-      history.pushState({ threesprite: 1 }, '')
+      history.pushState({ prspr: 1 }, '')
     }
     window.addEventListener('popstate', onPop)
     return () => window.removeEventListener('popstate', onPop)

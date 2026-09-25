@@ -1,12 +1,12 @@
 /**
- * Play ThreeSprite sprites in any engine.
+ * Play PrSpr editor sprites in any engine.
  *
  * Export a project as `Atlas + JSON`, load the sheet PNG however your engine
  * loads images, and hand the manifest to `TSpriteSheet.parse`. Each tick, say
  * where the camera is and how far into the animation you are, and `resolve`
  * returns the rectangle to cut from the sheet and the feet to hang it from.
  *
- *   import { TSpriteSheet, turnsFromGround } from '@threesprite/runtime'
+ *   import { TSpriteSheet, turnsFromGround } from '@prspr/runtime'
  *
  *   const sheet = TSpriteSheet.parse(await (await fetch('HERO.json')).json())
  *   const image = await loadImage(sheet.image)

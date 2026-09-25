@@ -1,6 +1,6 @@
-# @threesprite/runtime
+# @prspr/runtime
 
-Plays ThreeSprite sprites in someone else's engine. Given where the camera is
+Plays PrSpr editor sprites in someone else's engine. Given where the camera is
 and how far into an animation you are, it tells you which rectangle to cut from
 the sheet and where the character's feet sit inside it.
 
@@ -23,7 +23,7 @@ flipped while drawing.
 ## Use it
 
 ```js
-import { TSpriteSheet, turnsFromGround, drawResolved } from '@threesprite/runtime'
+import { TSpriteSheet, turnsFromGround, drawResolved } from '@prspr/runtime'
 
 const sheet = TSpriteSheet.parse(await (await fetch('HERO.json')).json())
 const image = await loadImage(sheet.image)          // 'HERO.png', beside the manifest
@@ -96,13 +96,13 @@ if (head.finished) actor.state = 'idle'
 
 ## Loading a .tsprite
 
-`@threesprite/runtime/tsprite` opens a project file with no export step. It
+`@prspr/runtime/tsprite` opens a project file with no export step. It
 does what the editor does when exporting: composes every frame of every
 rotation from the 3D rig, the skinned parts and the solids, then trims and packs
 them into one sheet.
 
 ```js
-import { loadTsprite } from '@threesprite/runtime/tsprite'
+import { loadTsprite } from '@prspr/runtime/tsprite'
 
 const { sheet, rgba, width, height } = loadTsprite(await readFile('hero.tsprite'))
 const texture = uploadRGBA(rgba, width, height)      // or use the .png field

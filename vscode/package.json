@@ -1,8 +1,8 @@
 {
-  "name": "threesprite-vscode",
-  "displayName": "ThreeSprite",
+  "name": "prspr-vscode",
+  "displayName": "PrSpr editor",
   "description": "Edit animated multi-view sprite projects (.tsprite) in an editor tab.",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "publisher": "digidream",
   "private": true,
   "license": "MIT",
@@ -24,8 +24,8 @@
   "contributes": {
     "customEditors": [
       {
-        "viewType": "threesprite.editor",
-        "displayName": "ThreeSprite",
+        "viewType": "prspr-editor.editor",
+        "displayName": "PrSpr editor",
         "selector": [
           {
             "filenamePattern": "*.tsprite"
@@ -36,9 +36,9 @@
     ],
     "commands": [
       {
-        "command": "threesprite.newProject",
+        "command": "prspr-editor.newProject",
         "title": "New Sprite Project",
-        "category": "ThreeSprite"
+        "category": "PrSpr editor"
       }
     ]
   },
@@ -47,11 +47,12 @@
     "compile": "tsc -p .",
     "build": "npm run build:app && npm run compile",
     "test": "npm run compile && node --test test/*.test.mjs",
-    "package": "npm run build && npx --yes @vscode/vsce package --no-dependencies --out threesprite.vsix"
+    "package": "npm run build && npx --yes @vscode/vsce package --no-dependencies --out prspr-editor.vsix"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
     "@types/vscode": "^1.84.0",
     "typescript": "^5.8.0"
-  }
+  },
+  "icon": "icon.png"
 }

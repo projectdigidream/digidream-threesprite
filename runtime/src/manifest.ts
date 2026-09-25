@@ -62,7 +62,7 @@ export interface AtlasManifest {
 
 export class ManifestError extends Error {
   constructor(message: string) {
-    super(`ThreeSprite manifest: ${message}`)
+    super(`PrSpr editor manifest: ${message}`)
     this.name = 'ManifestError'
   }
 }

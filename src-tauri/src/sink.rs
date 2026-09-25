@@ -98,7 +98,7 @@ mod tests {
 
     #[test]
     fn dir_write_refuses_escapes() {
-        let tmp = std::env::temp_dir().join(format!("threesprite-sink-{}", std::process::id()));
+        let tmp = std::env::temp_dir().join(format!("prspr-editor-sink-{}", std::process::id()));
         let r = write_dir(&tmp, &[("../x.txt".to_string(), vec![1])]);
         assert!(r.is_err());
         let ok = write_dir(&tmp, &[("sub/y.txt".to_string(), vec![1, 2, 3])]).unwrap();

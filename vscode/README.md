@@ -1,7 +1,7 @@
-# ThreeSprite for VS Code
+# PrSpr editor for VS Code
 
 Opens `.tsprite` projects in an editor tab. Click a sprite project in the
-explorer and the full ThreeSprite editor comes up: draw the views, rig the
+explorer and the full PrSpr editor editor comes up: draw the views, rig the
 skeleton, animate it, watch it in the 3D studio and export sheets, without
 leaving the window.
 
@@ -31,7 +31,7 @@ its first argument as a version number.
 Open this folder in VS Code and press `F5` to launch an Extension Development
 Host, then open any `.tsprite` file in it.
 
-To start a sprite from scratch, run **ThreeSprite: New Sprite Project** from
+To start a sprite from scratch, run **PrSpr editor: New Sprite Project** from
 the command palette. It asks where to save the file, opens it, and shows the
 same setup as the app's own New project: name, sprite code, canvas size and
 number of views. Canvas size cannot change once a project exists, which is why
@@ -44,11 +44,11 @@ the command until it reloads: run **Developer: Reload Window**.
 
 ## Package and install
 
-`npm run package` writes `threesprite.vsix`. To install it:
+`npm run package` writes `prspr-editor.vsix`. To install it:
 
 ```bash
 npm run package
-code --install-extension threesprite.vsix
+code --install-extension prspr-editor.vsix
 ```
 
 On macOS the `code` command is not on `PATH` until you add it: in VS Code run
@@ -56,7 +56,7 @@ On macOS the `code` command is not on `PATH` until you add it: in VS Code run
 Until then, call the binary where it lives:
 
 ```bash
-"/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code" --install-extension threesprite.vsix
+"/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code" --install-extension prspr-editor.vsix
 ```
 
 Or skip the command line: **Extensions → … → Install from VSIX…**.

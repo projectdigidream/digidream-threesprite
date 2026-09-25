@@ -7,7 +7,7 @@ import { buildWebviewHtml, makeNonce } from './webviewHtml'
 const BYTES_TIMEOUT_MS = 20_000
 
 export class TSpriteEditorProvider implements vscode.CustomEditorProvider<TSpriteDocument> {
-  static readonly viewType = 'threesprite.editor'
+  static readonly viewType = 'prspr-editor.editor'
 
   static register(context: vscode.ExtensionContext): vscode.Disposable {
     return vscode.window.registerCustomEditorProvider(
@@ -89,7 +89,7 @@ export class TSpriteEditorProvider implements vscode.CustomEditorProvider<TSprit
           void vscode.commands.executeCommand('workbench.action.files.save')
           break
         case 'error':
-          void vscode.window.showErrorMessage(`ThreeSprite: ${message.message}`)
+          void vscode.window.showErrorMessage(`PrSpr editor: ${message.message}`)
           break
       }
     })
