@@ -1,16 +1,17 @@
 #!/bin/zsh
 # Boots the Medium_Phone AVD headlessly (if no emulator is running), installs
-# the debug APK, runs the in-app self-test via the AppData marker, then
-# relaunches normally and screenshots. Output: ./drive-out/android/
+# an APK, runs the in-app self-test via the AppData marker, then relaunches
+# normally and screenshots. Output: ./drive-out/android/
 #   pnpm tauri android build --debug --apk --target aarch64   # first
-#   scripts/android-selftest.sh
+#   scripts/android-selftest.sh                               # the debug APK
+#   scripts/android-selftest.sh path/to/app-universal-release.apk
 set -u
 export ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
 export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="${OUT:-$ROOT/drive-out/android}"
 mkdir -p "$OUT"
-APK="$ROOT/src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk"
+APK="${1:-$ROOT/src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk}"
 PKG=com.digidream.threesprite
 AVD="${AVD:-Medium_Phone}"
 

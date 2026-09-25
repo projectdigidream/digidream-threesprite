@@ -24,6 +24,32 @@ android {
         versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()
         versionName = tauriProperties.getProperty("tauri.android.versionName", "1.0")
     }
+    /*
+     * Signing. `keystore.properties` beside this file (git-ignored) holds a real
+     * release key when there is one; see "Signing (Android release)" in the
+     * README. Without it a local release build falls back to the standard
+     * Android debug key, so the APK still installs on a device and upgrades a
+     * debug build in place. That key is for your own devices, never for a store.
+     */
+    val keystoreProperties = Properties().apply {
+        val propFile = rootProject.file("keystore.properties")
+        if (propFile.exists()) propFile.inputStream().use { load(it) }
+    }
+    signingConfigs {
+        create("release") {
+            if (keystoreProperties.isEmpty) {
+                storeFile = File(System.getProperty("user.home"), ".android/debug.keystore")
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            } else {
+                storeFile = file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
     buildTypes {
         getByName("debug") {
             manifestPlaceholders["usesCleartextTraffic"] = "true"
@@ -37,6 +63,7 @@ android {
             }
         }
         getByName("release") {
+            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = true
             proguardFiles(
                 *fileTree(".") { include("**/*.pro") }

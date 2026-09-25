@@ -103,7 +103,25 @@ What the browser version does and does not do: everything in the editor is the s
 
 ### Signing (Android release)
 
-Generate a keystore once with `keytool -genkey -v -keystore release.jks -alias key -keyalg RSA -keysize 2048 -validity 10000`, then create `src-tauri/gen/android/keystore.properties` with `storeFile`, `storePassword`, `keyAlias`, `keyPassword`. Keystores and that properties file are git-ignored.
+A release build is signed, so it installs on a device without further steps.
+
+For your own devices nothing is needed: with no `keystore.properties` present,
+Gradle falls back to the standard Android debug key. That key is fine for
+sideloading and upgrades a debug build in place, but a store will not take it.
+
+To sign with a real key, generate one once and tell Gradle where it is:
+
+```bash
+keytool -genkey -v -keystore release.jks -alias key -keyalg RSA -keysize 2048 -validity 10000
+```
+
+Then create `src-tauri/gen/android/keystore.properties` with `storeFile`,
+`storePassword`, `keyAlias` and `keyPassword`. Keystores and that properties
+file are git-ignored.
+
+Prefer the release build for anything you actually use: the debug APK carries
+full Rust debug symbols, which makes it around 134 MB against 7.6 MB, and its
+unoptimised rasterizer is noticeably slower to draw.
 
 ## Verification
 
