@@ -1,5 +1,6 @@
 const PATHS: Record<string, string> = {
   pencil: 'M3 21l3.5-.9L19 7.6 16.4 5 3.9 17.5 3 21z M14 7l3 3',
+  dither: 'M4 4h3v3H4z M10 4h3v3h-3z M16 4h3v3h-3z M7 7h3v3H7z M13 7h3v3h-3z M4 10h3v3H4z M10 10h3v3h-3z M16 10h3v3h-3z M7 13h3v3H7z M13 13h3v3h-3z M4 16h3v3H4z M10 16h3v3h-3z M16 16h3v3h-3z',
   eraser: 'M16 3l5 5-9.5 9.5H7L3 13.5 16 3z M9 21h12 M7 17.5l-4-4',
   fill: 'M4 13l7-7 7 7-7 7-7-7z M11 6V3 M20 16c0 1.7 1 3 1 3s1-1.3 1-3-1-2-1-2-1 .3-1 2z',
   eyedropper: 'M3 21l1-4 9-9 3 3-9 9-4 1z M13 8l2-2 3 3-2 2 M15 3l2-2 5 5-2 2',

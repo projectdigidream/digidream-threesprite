@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { composeFrame, imageKey, partCanvasMatrix } from '../../core/raster/rasterizer'
 import { fillAt, strokeSegment } from '../../core/tools/brush'
+import { ditherMask } from '../../core/tools/dither'
 import { centeredPan, clampZoom, fitZoom, nextZoom, snapZoom, zoomAbout } from '../../core/tools/zoom'
 import { blitCopy, clearRect, cloneImage, createImage, cropImage, TRANSPARENT, type Rect } from '../../domain/image'
 import { addBone, getPartImage } from '../../domain/project'
@@ -27,7 +28,7 @@ type Pt = { x: number; y: number }
 
 type Gesture =
   | { kind: 'idle' }
-  | { kind: 'stroke'; pointerId: number; tool: 'pencil' | 'eraser'; key: string; partId: Id; variantId: Id; view: number; before: PartImage | undefined; working: PartImage; last: Pt; startClient: Pt; startedAt: number; moved: boolean; timer: number }
+  | { kind: 'stroke'; pointerId: number; tool: 'pencil' | 'eraser' | 'dither'; key: string; partId: Id; variantId: Id; view: number; before: PartImage | undefined; working: PartImage; last: Pt; startClient: Pt; startedAt: number; moved: boolean; timer: number }
   | { kind: 'select'; pointerId: number; start: Pt; partId: Id }
   | { kind: 'move'; pointerId: number; key: string; partId: Id; variantId: Id; view: number; before: PartImage; base: PartImage; float: PartImage; rect: Rect; start: Pt; delta: Pt }
   | { kind: 'pan'; pointerId: number; startClient: Pt; startPan: Pt }
@@ -340,7 +341,8 @@ export default function PixelCanvas({ view: viewProp, embedded = false }: Props)
     if (g.kind !== 'stroke') return
     if (g.timer) clearTimeout(g.timer)
     overridesRef.current.delete(g.key)
-    if (commit) editorStore.getState().commitPixels(g.tool === 'pencil' ? 'Draw' : 'Erase', g.partId, g.variantId, g.view, g.before, g.working)
+    const label = g.tool === 'eraser' ? 'Erase' : g.tool === 'dither' ? 'Dither' : 'Draw'
+    if (commit) editorStore.getState().commitPixels(label, g.partId, g.variantId, g.view, g.before, g.working)
     gestureRef.current = { kind: 'idle' }
     schedule()
   }
@@ -484,11 +486,12 @@ export default function PixelCanvas({ view: viewProp, embedded = false }: Props)
     const ip = canvasToImage(t, c)
     if (!ip) return
 
-    if (ui.tool === 'pencil' || ui.tool === 'eraser') {
+    if (ui.tool === 'pencil' || ui.tool === 'eraser' || ui.tool === 'dither') {
       const size = newImageSize(doc, t.partId, t.variantId)
       const working = t.image ? cloneImage(t.image) : createImage(size.w, size.h)
       const color = ui.tool === 'eraser' ? TRANSPARENT : ui.primary
-      strokeSegment(working, ip.x, ip.y, ip.x, ip.y, color, ui.brushSize, ui.mirrorDraw)
+      const mask = ui.tool === 'dither' ? ditherMask(ui.ditherDensity, ui.ditherOffset) : undefined
+      strokeSegment(working, ip.x, ip.y, ip.x, ip.y, color, ui.brushSize, ui.mirrorDraw, mask)
       const key = imageKey(t.partId, t.variantId, t.srcView)
       overridesRef.current.set(key, working)
       const timer = e.pointerType === 'touch'
@@ -581,7 +584,8 @@ export default function PixelCanvas({ view: viewProp, embedded = false }: Props)
       if (!g.moved && dist({ x: e.clientX, y: e.clientY }, g.startClient) > 6) g.moved = true
       if (ip.x === g.last.x && ip.y === g.last.y) return
       const color = g.tool === 'eraser' ? TRANSPARENT : s.ui.primary
-      strokeSegment(g.working, g.last.x, g.last.y, ip.x, ip.y, color, s.ui.brushSize, s.ui.mirrorDraw)
+      const mask = g.tool === 'dither' ? ditherMask(s.ui.ditherDensity, s.ui.ditherOffset) : undefined
+      strokeSegment(g.working, g.last.x, g.last.y, ip.x, ip.y, color, s.ui.brushSize, s.ui.mirrorDraw, mask)
       g.last = ip
       schedule()
       return

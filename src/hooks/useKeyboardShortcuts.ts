@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { editorStore, type ToolId } from '../store/editorStore'
 
-const TOOL_KEYS: Record<string, ToolId> = { b: 'pencil', e: 'eraser', g: 'fill', i: 'eyedropper', m: 'select', v: 'move', h: 'hand' }
+const TOOL_KEYS: Record<string, ToolId> = { b: 'pencil', e: 'eraser', d: 'dither', g: 'fill', i: 'eyedropper', m: 'select', v: 'move', h: 'hand' }
 
 export function isTypingTarget(t: EventTarget | null): boolean {
   const el = t as HTMLElement | null

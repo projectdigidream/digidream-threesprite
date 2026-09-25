@@ -17,7 +17,7 @@ enablePatches()
 setAutoFreeze(false)
 
 export type Mode = 'draw' | 'rig' | 'animate' | 'preview' | 'export'
-export type ToolId = 'pencil' | 'eraser' | 'fill' | 'eyedropper' | 'select' | 'move' | 'hand'
+export type ToolId = 'pencil' | 'eraser' | 'dither' | 'fill' | 'eyedropper' | 'select' | 'move' | 'hand'
 export type RigTool = 'select' | 'addBone'
 
 export interface UiState {
@@ -25,6 +25,10 @@ export interface UiState {
   tool: ToolId
   rigTool: RigTool
   brushSize: number
+  /** Dither pattern coverage, 0 (nothing) to 16 (solid); 8 is a checkerboard. */
+  ditherDensity: number
+  /** Sideways phase of the dither pattern, 0 to 3. */
+  ditherOffset: number
   view: ViewIndex
   animId: Id | null
   frame: number
@@ -101,6 +105,8 @@ export function defaultUi(doc: Project): UiState {
     tool: 'pencil',
     rigTool: 'select',
     brushSize: 1,
+    ditherDensity: 8,
+    ditherOffset: 0,
     view: 1,
     animId: doc.animationOrder[0] ?? null,
     frame: 0,

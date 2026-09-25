@@ -2,7 +2,9 @@ const SECTIONS: { title: string; rows: [string, string][] }[] = [
   {
     title: 'Drawing',
     rows: [
-      ['B / E / G / I', 'Pencil / eraser / fill / colour picker'],
+      ['B / E / D', 'Pencil / eraser / dither'],
+      ['G / I', 'Fill / colour picker'],
+      ['Dither density, offset', 'Coverage of the pattern, and sliding it sideways to mesh'],
       ['M / V / H', 'Select / move / pan'],
       ['X', 'Swap primary and secondary colours'],
       ['Right-click · long-press', 'Pick the colour under the pointer'],

@@ -512,3 +512,15 @@ button.danger { background: var(--danger); color: #2a0b0b; border-color: transpa
 .mobile__sheet .transport__field { font-size: 11px; }
 .mobile__sheet .transport__field input[inputmode] { width: 44px; min-height: 28px; }
 .mobile__sheet .transport__frame { min-width: 48px; font-size: 11px; }
+
+/* ── dither settings (shown while the dither tool is active) ───────────────── */
+
+.tool-panel__dither { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.tool-panel--h .tool-panel__dither { flex-direction: row; }
+.tool-panel__dither label { display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 10px; color: var(--fg-dim); }
+.tool-panel--h .tool-panel__dither label { flex-direction: row-reverse; gap: 6px; }
+.tool-panel__dither span { font-variant-numeric: tabular-nums; }
+.tool-panel__dither input[type='range'] { width: 44px; accent-color: var(--accent); margin: 0; }
+.tool-panel--h .tool-panel__dither input[type='range'] { width: 72px; }
+.dither-offset { width: var(--hit); font-size: 11px; font-variant-numeric: tabular-nums; color: var(--fg-dim); }
+.dither-offset:hover { color: var(--fg); }
