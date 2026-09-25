@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { createProject, normalizeSpriteName } from '../../domain/project'
-import { MAX_CANVAS, MIN_CANVAS } from '../../domain/types'
+import { MAX_CANVAS, MAX_SPRITE_NAME, MIN_CANVAS } from '../../domain/types'
 import { clampViewCount, MAX_VIEWS, VIEW_PRESETS } from '../../domain/views'
 import { askConfirm } from '../../core/ui/dialogs'
 import { useEditor } from '../../store/editorStore'
@@ -42,8 +42,9 @@ export default function NewProjectDialog({ onClose, defaultName }: Props) {
           <input value={name} onChange={e => setName(e.target.value)} autoFocus />
         </label>
         <label className="field">
-          <span>Sprite code (4 chars, for Doom-style export)</span>
-          <input value={spriteName} maxLength={4} onChange={e => setSpriteName(e.target.value.toUpperCase())} onBlur={() => setSpriteName(normalizeSpriteName(spriteName))} />
+          <span>Sprite id (the stem of every exported file)</span>
+          <input value={spriteName} maxLength={MAX_SPRITE_NAME} onChange={e => setSpriteName(e.target.value)} onBlur={() => setSpriteName(normalizeSpriteName(spriteName))} />
+          <small>Letters, digits, <code>_</code> and <code>-</code>. Doom-style export is the one format that wants exactly 4, in capitals.</small>
         </label>
         <div className="field">
           <span>Canvas size (square, {MIN_CANVAS}–{MAX_CANVAS} px). Every frame of every view is rendered on this canvas; feet go on the bottom row.</span>

@@ -3,7 +3,7 @@
  * the panel can show file names and refuse impossible exports up front. The
  * naming rules mirror the Rust side exactly (src-tauri/src/commands.rs).
  */
-import { SPRITE_NAME_RE, type Project } from '../../domain/types'
+import { DOOM_SPRITE_NAME_RE, type Project } from '../../domain/types'
 import type { ExportSelection } from './types'
 
 export interface PlannedFile {
@@ -58,7 +58,7 @@ export function planExport(project: Project, sel: ExportSelection): ExportPlan {
 
   switch (sel.format) {
     case 'doom': {
-      if (!SPRITE_NAME_RE.test(project.spriteName)) errors.push(`Sprite code "${project.spriteName}" must be 4 characters, A–Z or 0–9 (Project settings).`)
+      if (!DOOM_SPRITE_NAME_RE.test(project.spriteName)) errors.push(`Doom-style naming needs a sprite id of exactly 4 characters, A–Z or 0–9; this one is "${project.spriteName}". Change it in Project settings, or pick another format.`)
       const frontOnly = !doomSupportsViews(N)
       if (frontOnly && !sel.options.doomFrontOnly) errors.push(`Doom-style naming supports 1, 8 or 16 views; this sprite has ${N}. Change the view count, or enable "front view only".`)
       if (frontOnly && sel.options.doomFrontOnly) warnings.push(`Only view 1 will be exported, as rotation 0 (${N} views cannot be named Doom-style).`)

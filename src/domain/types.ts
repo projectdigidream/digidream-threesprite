@@ -174,7 +174,11 @@ export interface Project {
   formatVersion: 3
   id: Id
   name: string
-  /** 4 characters, [A-Z0-9]; the Doom-style export name. */
+  /**
+   * Stem of every exported file and the atlas manifest's `sprite` id. Letters,
+   * digits, `_` and `-`, up to 32 characters. Doom-style export needs exactly
+   * four of them, in upper case, but only that format cares.
+   */
   spriteName: string
   canvas: { size: number }
   /** `elevationDeg`: camera pitch above the horizon for every view (0 = level). */
@@ -197,7 +201,11 @@ export const FORMAT_VERSION = 3 as const
 export const MIN_CANVAS = 8
 export const MAX_CANVAS = 256
 export const MAX_FRAMES = 256
-export const SPRITE_NAME_RE = /^[A-Z0-9]{4}$/
+export const MAX_SPRITE_NAME = 32
+/** Safe in a file name, an atlas key and a folder name. */
+export const SPRITE_NAME_RE = /^[A-Za-z0-9_-]{1,32}$/
+/** Doom lump names are eight characters: four of sprite, one of frame, one of rotation. */
+export const DOOM_SPRITE_NAME_RE = /^[A-Z0-9]{4}$/
 
 export const ZERO3: Readonly<Vec3> = Object.freeze({ r: 0, u: 0, f: 0 })
 export const ONE3: Readonly<Vec3> = Object.freeze({ r: 1, u: 1, f: 1 })

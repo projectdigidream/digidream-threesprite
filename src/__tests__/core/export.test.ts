@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { doomFrameLetter, doomRotationChar, planExport, slug } from '../../core/export/plan'
 import { DEFAULT_OPTIONS } from '../../core/export/types'
+import { buildAtlas } from '../../core/export/atlasBuild'
 import { buildManifest, collectFrames, decodeBundle, encodeBundle } from '../../core/io/exportBundle'
 import { addAnimation, createProject, setViews } from '../../domain/project'
 
@@ -70,5 +71,41 @@ describe('bundle', () => {
     expect(back.manifest.views).toEqual({ count: 4, mirror: true })
     expect(back.buffers).toHaveLength(16)
     expect(Array.from(back.buffers[3])).toEqual(Array.from(collected.buffers[3]))
+  })
+})
+
+describe('the sprite id and export formats', () => {
+  const longId = 'Hero_Knight-02'
+
+  it('only Doom-style naming insists on four capitals', () => {
+    const p = createProject({ canvasSize: 8, viewCount: 8, spriteName: longId })
+    const plan = (format: 'doom' | 'atlas' | 'pngs' | 'gif') =>
+      planExport(p, { format, animIds: p.animationOrder, options: DEFAULT_OPTIONS })
+
+    expect(plan('doom').errors.join(' ')).toMatch(/exactly 4 characters/)
+    for (const format of ['atlas', 'pngs', 'gif'] as const) {
+      expect(plan(format).errors, format).toEqual([])
+    }
+  })
+
+  it('carries a long id through the file names and the atlas manifest', () => {
+    const p = createProject({ canvasSize: 8, viewCount: 4, spriteName: longId })
+    const sel = { format: 'pngs' as const, animIds: p.animationOrder, options: DEFAULT_OPTIONS }
+    expect(planExport(p, sel).files[0].name.startsWith(`${longId}/`)).toBe(true)
+
+    const collected = collectFrames(p, p.animationOrder)
+    const atlas = buildAtlas({
+      sprite: p.spriteName,
+      canvas: p.canvas.size,
+      views: { count: p.views.count, mirror: p.views.mirror },
+      worldHeight: p.export.worldHeight,
+      animations: collected.animations,
+      frames: collected.frames,
+      buffers: collected.buffers,
+      pow2: false,
+    })
+    const manifest = atlas.manifest as { sprite: string; image: string }
+    expect(manifest.sprite).toBe(longId)
+    expect(manifest.image).toBe(`${longId}.png`)
   })
 })

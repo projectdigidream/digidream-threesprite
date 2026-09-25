@@ -15,6 +15,7 @@ import {
   MAX_CANVAS,
   MAX_FRAMES,
   MIN_CANVAS,
+  MAX_SPRITE_NAME,
   SPRITE_NAME_RE,
   type Animation,
   type Bone,
@@ -47,9 +48,13 @@ export function clampCanvasSize(n: number): number {
   return Math.min(MAX_CANVAS, Math.max(MIN_CANVAS, Math.round(n)))
 }
 
+/**
+ * Make a sprite id safe for file names, keeping the case the author typed.
+ * Only Doom-style export cares about length, and it says so at export time.
+ */
 export function normalizeSpriteName(s: string): string {
-  const clean = s.toUpperCase().replace(/[^A-Z0-9]/g, '')
-  return (clean + 'SPRT').slice(0, 4)
+  const clean = s.replace(/[^A-Za-z0-9_-]/g, '').slice(0, MAX_SPRITE_NAME)
+  return clean || 'SPRT'
 }
 
 export function createProject(opts: NewProjectOptions = {}): Project {
@@ -410,7 +415,7 @@ const isVec3 = (v: unknown): v is Vec3 => !!v && typeof v === 'object' && ['r', 
 export function validate(p: Project): string[] {
   const errs: string[] = []
   if (p.formatVersion !== FORMAT_VERSION) errs.push(`unsupported formatVersion ${p.formatVersion}`)
-  if (!SPRITE_NAME_RE.test(p.spriteName)) errs.push(`spriteName "${p.spriteName}" must be 4 chars [A-Z0-9]`)
+  if (!SPRITE_NAME_RE.test(p.spriteName)) errs.push(`spriteName "${p.spriteName}" must be 1–${MAX_SPRITE_NAME} characters: letters, digits, _ or -`)
   if (p.canvas.size < MIN_CANVAS || p.canvas.size > MAX_CANVAS) errs.push(`canvas size ${p.canvas.size} out of range`)
   if (p.views.count !== clampViewCount(p.views.count)) errs.push(`views.count ${p.views.count} out of range`)
   if (!Number.isFinite(p.views.elevationDeg)) errs.push('views.elevationDeg invalid')

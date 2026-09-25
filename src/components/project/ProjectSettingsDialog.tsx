@@ -1,3 +1,4 @@
+import { MAX_SPRITE_NAME } from '../../domain/types'
 import { useState } from 'react'
 import { normalizeSpriteName, setViews } from '../../domain/project'
 import { authoredViewCount, clampViewCount, MAX_VIEWS, VIEW_PRESETS } from '../../domain/views'
@@ -37,7 +38,7 @@ export default function ProjectSettingsDialog({ onClose }: { onClose: () => void
       <div className="modal" onClick={e => e.stopPropagation()} role="dialog" aria-label="Project settings">
         <h2>Project settings</h2>
         <label className="field"><span>Name</span><input value={name} onChange={e => setName(e.target.value)} /></label>
-        <label className="field"><span>Sprite code (4 chars)</span><input value={spriteName} maxLength={4} onChange={e => setSpriteName(e.target.value.toUpperCase())} /></label>
+        <label className="field"><span>Sprite id (the stem of every exported file)</span><input value={spriteName} maxLength={MAX_SPRITE_NAME} onChange={e => setSpriteName(e.target.value)} /><small>Letters, digits, <code>_</code> and <code>-</code>. Doom-style export wants exactly 4, in capitals.</small></label>
         <div className="field">
           <span>Canvas: {doc.canvas.size}px (fixed after creation)</span>
         </div>

@@ -18,7 +18,7 @@ describe('createProject', () => {
   it('builds a valid starter project', () => {
     const p = createProject({ name: 'Hero', spriteName: 'hero', canvasSize: 48, viewCount: 6 })
     expect(validate(p)).toEqual([])
-    expect(p.spriteName).toBe('HERO')
+    expect(p.spriteName).toBe('hero')
     expect(p.canvas.size).toBe(48)
     expect(p.views).toEqual({ count: 6, mirror: true, elevationDeg: 0 })
     expect(p.skeleton.rootOrder).toHaveLength(1)
@@ -30,8 +30,8 @@ describe('createProject', () => {
     const p = createProject({ canvasSize: 3, viewCount: 999, spriteName: 'a-b' })
     expect(p.canvas.size).toBe(8)
     expect(p.views.count).toBe(64)
-    expect(p.spriteName).toBe('ABSP')
-    expect(normalizeSpriteName('too long name')).toBe('TOOL')
+    expect(p.spriteName).toBe('a-b')
+    expect(normalizeSpriteName('too long name')).toBe('toolongname')
   })
 })
 
@@ -293,5 +293,28 @@ describe('attachPart keeps the part in place', () => {
     const centreAfter = applyAffine(evalPose(p.skeleton, null, 0).get(a)!, p.parts[solids.id].solids!.primitives[prim.id].position)
     expect(close(centreAfter.r, centreBefore.r) && close(centreAfter.u, centreBefore.u) && close(centreAfter.f, centreBefore.f)).toBe(true)
     expect(validate(p)).toEqual([])
+  })
+})
+
+describe('the sprite id', () => {
+  it('keeps the case and length the author typed, dropping only unsafe characters', () => {
+    expect(normalizeSpriteName('Hero_Knight-02')).toBe('Hero_Knight-02')
+    expect(normalizeSpriteName('a b/c:d')).toBe('abcd')
+    expect(normalizeSpriteName('')).toBe('SPRT')
+    expect(normalizeSpriteName('***')).toBe('SPRT')
+    expect(normalizeSpriteName('x'.repeat(50))).toHaveLength(32)
+  })
+
+  it('validates anything file-name safe, not just four capitals', () => {
+    for (const id of ['A', 'hero', 'Hero_Knight-02', 'SPRT', 'x'.repeat(32)]) {
+      const p = createProject({ spriteName: id })
+      expect(validate(p), id).toEqual([])
+      expect(p.spriteName).toBe(id)
+    }
+    const bad = createProject()
+    bad.spriteName = 'has space'
+    expect(validate(bad).some(e => e.includes('spriteName'))).toBe(true)
+    bad.spriteName = ''
+    expect(validate(bad).some(e => e.includes('spriteName'))).toBe(true)
   })
 })
