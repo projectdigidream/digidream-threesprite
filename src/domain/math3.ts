@@ -137,6 +137,12 @@ export interface ViewProj {
   size: number
   /** Camera elevation above the horizon, degrees. */
   elevationDeg: number
+  /**
+   * How far the camera stands, in pixels. The projection itself stays
+   * orthographic; the distance only says how much closing that distance
+   * grows a thing. 0 or absent = flat, nothing changes size with depth.
+   */
+  distance?: number
 }
 
 export interface Projected { x: number; y: number; depth: number }
@@ -153,6 +159,24 @@ export function projectPoint(p: Vec3, vp: ViewProj): Projected {
   const sy = p.u
   const d = p.f * c - p.r * s
   return { x: vp.size / 2 + sx, y: vp.size - (sy * cp - d * sp), depth: sy * sp + d * cp }
+}
+
+/** The narrowest and widest a depth change may squeeze or stretch something. */
+export const DEPTH_SCALE_MIN = 0.25
+export const DEPTH_SCALE_MAX = 4
+
+/**
+ * How much bigger something at `curDepth` looks than the same thing at
+ * `restDepth`, for a camera `vp.distance` pixels away: the ratio of the two
+ * perspective divides, so a flat view — or anything that has not moved in
+ * depth — gives exactly 1 and draws as it always did.
+ */
+export function depthScale(restDepth: number, curDepth: number, vp: ViewProj): number {
+  const d = vp.distance ?? 0
+  if (!(d > 0)) return 1
+  const near = d * 0.2 // nothing is ever allowed to reach the lens
+  const k = Math.max(near, d - restDepth) / Math.max(near, d - curDepth)
+  return Math.max(DEPTH_SCALE_MIN, Math.min(DEPTH_SCALE_MAX, k))
 }
 
 /** Canvas point at a given depth → character-frame point (inverse of `projectPoint`). */

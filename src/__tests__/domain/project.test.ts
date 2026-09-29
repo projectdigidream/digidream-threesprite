@@ -20,7 +20,7 @@ describe('createProject', () => {
     expect(validate(p)).toEqual([])
     expect(p.spriteName).toBe('hero')
     expect(p.canvas.size).toBe(48)
-    expect(p.views).toEqual({ count: 6, mirror: true, elevationDeg: 0 })
+    expect(p.views).toEqual({ count: 6, mirror: true, elevationDeg: 0, cameraDistance: 0 })
     expect(p.skeleton.rootOrder).toHaveLength(1)
     expect(p.partOrder).toHaveLength(1)
     expect(p.animationOrder).toHaveLength(1)

@@ -6,7 +6,8 @@
  * (current projected frame × inverse rest frame). The deformed grid is drawn
  * as textured triangles with nearest sampling, so the art stays crisp.
  */
-import type { BoneProjection } from './pose'
+import type { ViewProj } from './math3'
+import { boneDepthScale, type BoneProjection } from './pose'
 import { apply, compose, invert, rotate, scale, translate, type Mat2D } from './transform'
 import type { PartImage } from './types'
 
@@ -84,8 +85,15 @@ export function buildSkinGrid(img: PartImage, restMatrix: Mat2D, boneRests: Bone
   return { cols, rows, uv, rest, weights }
 }
 
-/** Deformed canvas positions: Σ w_b · (cur_b · rest_b⁻¹) · restPos. */
-export function deformGrid(grid: SkinGrid, boneRests: BoneProjection[], boneCurs: BoneProjection[], foreshorten: boolean): Float32Array {
+/**
+ * Deformed canvas positions: Σ w_b · (cur_b · rest_b⁻¹) · restPos.
+ *
+ * With a camera distance in `vp`, each bone's frame also carries its own
+ * depth scale, so the blend grows the end of the part that came towards the
+ * camera and leaves the end that did not — a hand reaching forward swells
+ * while its shoulder stays put.
+ */
+export function deformGrid(grid: SkinGrid, boneRests: BoneProjection[], boneCurs: BoneProjection[], foreshorten: boolean, vp?: ViewProj): Float32Array {
   const nb = boneRests.length
   const deltas: Mat2D[] = []
   for (let b = 0; b < nb; b++) {
@@ -93,7 +101,8 @@ export function deformGrid(grid: SkinGrid, boneRests: BoneProjection[], boneCurs
     const cu = boneCurs[b]
     const fs = foreshorten && r.length >= 0.5 ? Math.max(0.15, Math.min(4, cu.length / r.length)) : 1
     const angle = cu.length < 0.5 ? r.angle : cu.angle
-    const curFrame = compose(translate(cu.origin.x, cu.origin.y), rotate(angle), scale(fs, 1))
+    const ds = boneDepthScale(r, cu, vp)
+    const curFrame = compose(translate(cu.origin.x, cu.origin.y), scale(ds, ds), rotate(angle), scale(fs, 1))
     const inv = invert(boneFrame(r, 1))
     deltas.push(inv ? compose(curFrame, inv) : { a: 1, b: 0, c: 0, d: 1, tx: 0, ty: 0 })
   }

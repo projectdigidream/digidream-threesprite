@@ -7,7 +7,7 @@
  */
 import { newId } from './ids'
 import { createImage } from './image'
-import { apply3, applyAffine, dot3, eulerMatrix, mul3, normalize3, projectPoint, rotationOf3, viewAxes, type Mat34, type ViewProj } from './math3'
+import { apply3, applyAffine, depthScale, dot3, eulerMatrix, mul3, normalize3, projectPoint, rotationOf3, viewAxes, type Mat34, type ViewProj } from './math3'
 import type { PartImage, Primitive, PrimitiveKind, RGBA, SolidsGroup, SolidsShading } from './types'
 
 export const PRIMITIVE_KINDS: PrimitiveKind[] = ['cube', 'sphere', 'cylinder', 'cone', 'pyramid']
@@ -164,8 +164,13 @@ export function outlineColor(color: RGBA): RGBA {
  * Rasterize a solids group placed by `world` (the owning bone's character-
  * frame affine) into a canvas-sized image for one view. Pure and
  * deterministic.
+ *
+ * `rest` is the same bone in the rest pose. Given it and a camera distance,
+ * every vertex is scaled about the bone's root by how far it travelled
+ * towards the camera, so a volume swung forward swells and one swung away
+ * shrinks. At rest the two affines agree and the image is untouched.
  */
-export function renderSolids(group: SolidsGroup, world: Mat34, vp: ViewProj): PartImage {
+export function renderSolids(group: SolidsGroup, world: Mat34, vp: ViewProj, rest?: Mat34): PartImage {
   const size = vp.size
   const img = createImage(size, size)
   const zbuf = new Float32Array(size * size).fill(-Infinity)
@@ -173,6 +178,8 @@ export function renderSolids(group: SolidsGroup, world: Mat34, vp: ViewProj): Pa
   const shade = new Float32Array(size * size)
   const axes = viewAxes(vp)
   const worldRot = rotationOf3(world)
+  const root = projectPoint(applyAffine(world, { r: 0, u: 0, f: 0 }), vp)
+  const persp = rest && (vp.distance ?? 0) > 0 ? { rest, ox: root.x, oy: root.y } : null
 
   // light in view space (x right, y up, z towards the camera)
   let L = [-0.45, 0.75, 0.55]
@@ -193,9 +200,15 @@ export function renderSolids(group: SolidsGroup, world: Mat34, vp: ViewProj): Pa
     const nx = new Float32Array(n), ny = new Float32Array(n), nz = new Float32Array(n)
     for (let i = 0; i < n; i++) {
       const local = apply3(R, { r: mesh.positions[i * 3] * prim.size.r, u: mesh.positions[i * 3 + 1] * prim.size.u, f: mesh.positions[i * 3 + 2] * prim.size.f })
-      const p = applyAffine(world, { r: local.r + prim.position.r, u: local.u + prim.position.u, f: local.f + prim.position.f })
-      const pr = projectPoint(p, vp)
-      vx[i] = pr.x; vy[i] = pr.y; vz[i] = pr.depth
+      const lp = { r: local.r + prim.position.r, u: local.u + prim.position.u, f: local.f + prim.position.f }
+      const pr = projectPoint(applyAffine(world, lp), vp)
+      let px = pr.x, py = pr.y
+      if (persp) {
+        const k = depthScale(projectPoint(applyAffine(persp.rest, lp), vp).depth, pr.depth, vp)
+        px = persp.ox + (px - persp.ox) * k
+        py = persp.oy + (py - persp.oy) * k
+      }
+      vx[i] = px; vy[i] = py; vz[i] = pr.depth
       const wn = normalize3(apply3(NR, { r: mesh.normals[i * 3], u: mesh.normals[i * 3 + 1], f: mesh.normals[i * 3 + 2] }))
       nx[i] = dot3(wn, axes.right); ny[i] = dot3(wn, axes.up); nz[i] = dot3(wn, axes.toward)
     }

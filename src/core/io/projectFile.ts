@@ -81,6 +81,7 @@ export function decodeProject(bytes: Uint8Array): DecodedProject {
     }
   }
   if (raw.views.elevationDeg === undefined) raw.views.elevationDeg = 0
+  if (raw.views.cameraDistance === undefined) raw.views.cameraDistance = 0
   const problems = validate(raw)
   if (problems.length) warnings.push(...problems.map(p => `Repairing: ${p}`))
   repairPalettes(raw)
@@ -114,7 +115,7 @@ interface V1Transform { x: number; y: number; rotation: number; scaleX: number; 
 interface V1Project {
   formatVersion: number
   canvas: { size: number }
-  views: { count: number; mirror: boolean; elevationDeg?: number }
+  views: { count: number; mirror: boolean; elevationDeg?: number; cameraDistance?: number }
   skeleton: { bones: Record<string, { parentId: string | null; rest: unknown }> }
   animations: Record<string, { boneTracks: Record<string, { rotation: { value: unknown }[]; translate: { value: unknown }[]; scale: { value: unknown }[] }> }>
 }

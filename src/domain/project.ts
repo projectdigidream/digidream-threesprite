@@ -39,8 +39,22 @@ export interface NewProjectOptions {
   viewCount?: number
   mirror?: boolean
   elevationDeg?: number
+  cameraDistance?: number
   /** Create the default bone/part/animation (true) or an empty skeleton. */
   starter?: boolean
+}
+
+/**
+ * Camera distance in canvas heights. 0 turns depth scaling off; anything
+ * nearer than half a canvas would blow up the moment a part leans forward,
+ * so the usable range starts there.
+ */
+export const MIN_CAMERA_DISTANCE = 0.5
+export const MAX_CAMERA_DISTANCE = 20
+
+export function clampCameraDistance(n: number): number {
+  if (!Number.isFinite(n) || n <= 0) return 0
+  return Math.min(MAX_CAMERA_DISTANCE, Math.max(MIN_CAMERA_DISTANCE, Math.round(n * 100) / 100))
 }
 
 export function clampCanvasSize(n: number): number {
@@ -67,7 +81,7 @@ export function createProject(opts: NewProjectOptions = {}): Project {
     name: opts.name?.trim() || 'Untitled sprite',
     spriteName: normalizeSpriteName(opts.spriteName ?? 'SPRT'),
     canvas: { size },
-    views: { count: clampViewCount(opts.viewCount ?? 8), mirror: opts.mirror ?? true, elevationDeg: opts.elevationDeg ?? 0 },
+    views: { count: clampViewCount(opts.viewCount ?? 8), mirror: opts.mirror ?? true, elevationDeg: opts.elevationDeg ?? 0, cameraDistance: clampCameraDistance(opts.cameraDistance ?? 0) },
     palettes: { [palette.id]: palette },
     paletteOrder: [palette.id],
     activePaletteId: palette.id,
@@ -386,12 +400,13 @@ export { ensureBoneTrack, ensurePartTrack } from './animation'
 
 // ── views ────────────────────────────────────────────────────────────────────
 
-/** Change the view count / mirror mode / elevation. Images for views that no longer exist are dropped; returns warnings. */
-export function setViews(p: Project, count: number, mirror: boolean, elevationDeg?: number): string[] {
+/** Change the view count / mirror mode / elevation / camera distance. Images for views that no longer exist are dropped; returns warnings. */
+export function setViews(p: Project, count: number, mirror: boolean, elevationDeg?: number, cameraDistance?: number): string[] {
   const warnings: string[] = []
   p.views.count = clampViewCount(count)
   p.views.mirror = mirror
   if (elevationDeg !== undefined && Number.isFinite(elevationDeg)) p.views.elevationDeg = Math.max(-60, Math.min(60, elevationDeg))
+  if (cameraDistance !== undefined) p.views.cameraDistance = clampCameraDistance(cameraDistance)
   const keep = new Set(authoredViews(p.views.count, p.views.mirror))
   for (const part of Object.values(p.parts)) {
     for (const v of Object.values(part.variants)) {
@@ -419,6 +434,7 @@ export function validate(p: Project): string[] {
   if (p.canvas.size < MIN_CANVAS || p.canvas.size > MAX_CANVAS) errs.push(`canvas size ${p.canvas.size} out of range`)
   if (p.views.count !== clampViewCount(p.views.count)) errs.push(`views.count ${p.views.count} out of range`)
   if (!Number.isFinite(p.views.elevationDeg)) errs.push('views.elevationDeg invalid')
+  if (p.views.cameraDistance !== clampCameraDistance(p.views.cameraDistance)) errs.push(`views.cameraDistance ${p.views.cameraDistance} out of range`)
 
   const bones = p.skeleton.bones
   const boneIds = new Set(Object.keys(bones))

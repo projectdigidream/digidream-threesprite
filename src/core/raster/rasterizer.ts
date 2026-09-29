@@ -134,7 +134,7 @@ export function composeFrame(project: Project, animId: Id | null, frame: number,
     if (!s.visible) continue
     const alpha = opts.dim && opts.dim.except !== partId ? opts.dim.alpha : 1
     if (part.solids) {
-      const img = renderSolids(part.solids, world, vp)
+      const img = renderSolids(part.solids, world, vp, anim ? restWorld : undefined)
       blitNearest(out, size, size, img, IDENTITY, alpha)
       continue
     }
@@ -158,13 +158,13 @@ export function composeFrame(project: Project, animId: Id | null, frame: number,
       }
       const restM = partMatrix(rp, rp, part)
       const grid = buildSkinGrid(img, restM, restProj, part.skin!.falloff, part.skin!.cell)
-      const posArr = deformGrid(grid, restProj, curProj, part.foreshorten)
+      const posArr = deformGrid(grid, restProj, curProj, part.foreshorten, vp)
       if (!gridIsAtRest(grid, posArr)) {
         rasterizeSkinnedGrid(out, size, size, img, grid, posArr, alpha)
         continue
       }
     }
-    blitNearest(out, size, size, img, snapMatrix(partMatrix(rp, cp, part)), alpha)
+    blitNearest(out, size, size, img, snapMatrix(partMatrix(rp, cp, part, vp)), alpha)
   }
 
   if (derived) flipXPixelsInPlace(out, size, size)
@@ -186,5 +186,5 @@ export function partCanvasMatrix(project: Project, animId: Id | null, frame: num
   if (!world || !restWorld) return null
   const rp = projectBone(restWorld, bone.length, vp)
   const cp = anim ? projectBone(world, bone.length, vp, rp.angle) : rp
-  return snapMatrix(partMatrix(rp, cp, part))
+  return snapMatrix(partMatrix(rp, cp, part, vp))
 }

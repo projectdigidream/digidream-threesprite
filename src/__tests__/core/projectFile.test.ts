@@ -31,7 +31,7 @@ describe('project file', () => {
     expect(warnings).toEqual([])
     expect(validate(q)).toEqual([])
     expect(q.name).toBe('Round trip')
-    expect(q.views).toEqual({ count: 6, mirror: true, elevationDeg: 0 })
+    expect(q.views).toEqual({ count: 6, mirror: true, elevationDeg: 0, cameraDistance: 0 })
     expect(q.parts[partId].variants[vid].images[1].pixels).toEqual(img.pixels)
     expect(q.parts[partId].variants[v2.id].images[3].width).toBe(5)
     expect(Array.from(q.parts[partId].variants[v2.id].images[3].pixels.slice((6 * 5 + 4) * 4))).toEqual([9, 8, 7, 200])

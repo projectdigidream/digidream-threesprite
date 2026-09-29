@@ -181,8 +181,13 @@ export interface Project {
    */
   spriteName: string
   canvas: { size: number }
-  /** `elevationDeg`: camera pitch above the horizon for every view (0 = level). */
-  views: { count: number; mirror: boolean; elevationDeg: number }
+  /**
+   * `elevationDeg`: camera pitch above the horizon for every view (0 = level).
+   * `cameraDistance`: how far the camera stands, in canvas heights, which
+   * decides how much a bone moving towards it grows what hangs off it.
+   * 0 = flat, the projection every project had before the setting existed.
+   */
+  views: { count: number; mirror: boolean; elevationDeg: number; cameraDistance: number }
   palettes: Record<Id, Palette>
   paletteOrder: Id[]
   /** The palette shown in the Draw tab. Always one of `palettes`. */
