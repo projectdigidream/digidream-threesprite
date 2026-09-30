@@ -13,6 +13,7 @@ import { buildSkinGrid, deformGrid, gridIsAtRest, rasterizeSkinnedGrid } from '.
 import { renderSolids } from '../../domain/solids'
 import { IDENTITY, invert, type Mat2D } from '../../domain/transform'
 import type { Id, PartImage, Project, ViewIndex } from '../../domain/types'
+import { partOrderFor } from '../../domain/project'
 import { isDerived, mirrorOf } from '../../domain/views'
 
 /** Key used by `overrides` maps: the working copy of an image during a stroke. */
@@ -122,7 +123,7 @@ export function composeFrame(project: Project, animId: Id | null, frame: number,
   const pose = evalPose(project.skeleton, anim, frame)
   const rest = anim ? evalPose(project.skeleton, null, 0) : pose
 
-  for (const partId of project.partOrder) {
+  for (const partId of partOrderFor(project, srcView)) {
     if (opts.only && !opts.only.has(partId)) continue
     const part = project.parts[partId]
     if (!part) continue

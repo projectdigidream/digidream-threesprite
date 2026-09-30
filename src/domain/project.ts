@@ -87,6 +87,7 @@ export function createProject(opts: NewProjectOptions = {}): Project {
     skeleton: { bones: {}, rootOrder: [] },
     parts: {},
     partOrder: [],
+    partOrderByView: {},
     animations: {},
     animationOrder: [],
     export: { worldHeight: 1 },
@@ -301,6 +302,7 @@ export function addPart(p: Project, opts: AddPartOptions): Part {
   }
   p.parts[part.id] = part
   p.partOrder.push(part.id)
+  for (const order of Object.values(p.partOrderByView)) order?.push(part.id)
   return part
 }
 
@@ -308,15 +310,76 @@ export function removePart(p: Project, id: Id): void {
   if (!p.parts[id]) return
   delete p.parts[id]
   p.partOrder.splice(p.partOrder.indexOf(id), 1)
+  for (const order of Object.values(p.partOrderByView)) {
+    const i = order?.indexOf(id) ?? -1
+    if (order && i >= 0) order.splice(i, 1)
+  }
   for (const anim of Object.values(p.animations)) delete anim.partTracks[id]
 }
 
-export function movePartOrder(p: Project, id: Id, toIndex: number): void {
-  const from = p.partOrder.indexOf(id)
+/** Reorder the parts, in `view`'s own order when it has one and otherwise globally. */
+export function movePartOrder(p: Project, id: Id, toIndex: number, view?: ViewIndex): void {
+  const order = view !== undefined ? p.partOrderByView[view] ?? p.partOrder : p.partOrder
+  const from = order.indexOf(id)
   if (from < 0) return
-  const to = Math.max(0, Math.min(p.partOrder.length - 1, toIndex))
-  p.partOrder.splice(from, 1)
-  p.partOrder.splice(to, 0, id)
+  const to = Math.max(0, Math.min(order.length - 1, toIndex))
+  order.splice(from, 1)
+  order.splice(to, 0, id)
+}
+
+// ── per-view layer order ─────────────────────────────────────────────────────
+
+/** The order `view` stacks its parts in: its own when it has one, else the project's. */
+export function partOrderFor(p: Project, view: ViewIndex): Id[] {
+  return p.partOrderByView[view] ?? p.partOrder
+}
+
+/** Whether `view` (or the view it is mirrored from) keeps its own order. */
+export function hasPartOrderOverride(p: Project, view: ViewIndex): boolean {
+  return !!p.partOrderByView[authoredViewOf(p, view)]
+}
+
+/** The view that actually holds a mirrored view's art and order. */
+export function authoredViewOf(p: Project, view: ViewIndex): ViewIndex {
+  return isDerived(p.views.count, p.views.mirror, view) ? mirrorOf(p.views.count, view) : view
+}
+
+/**
+ * Give `view` its own layer order, starting from the one it draws with now, or
+ * take it away so it follows the project's again. Mirrored views are handled
+ * by their source, which is the frame they are flipped from. Returns nothing,
+ * so it can be the whole body of an immer recipe; ask `authoredViewOf` which
+ * view it touched.
+ */
+export function setPartOrderOverride(p: Project, view: ViewIndex, on: boolean): void {
+  const k = authoredViewOf(p, view)
+  if (on) p.partOrderByView[k] = [...partOrderFor(p, k)]
+  else delete p.partOrderByView[k]
+}
+
+/** Drop orders that no longer name an authored view, and make the rest permutations again. */
+export function repairPartOrders(p: Project): string[] {
+  const warnings: string[] = []
+  if (!p.partOrderByView || typeof p.partOrderByView !== 'object') {
+    p.partOrderByView = {}
+    return warnings
+  }
+  const authored = new Set(authoredViews(p.views.count, p.views.mirror))
+  for (const key of Object.keys(p.partOrderByView)) {
+    const view = Number(key)
+    const order = p.partOrderByView[view]
+    if (!authored.has(view) || !Array.isArray(order)) {
+      delete p.partOrderByView[view]
+      if (Array.isArray(order)) warnings.push(`dropped the layer order of view ${view}, which is not authored`)
+      continue
+    }
+    const seen = new Set<Id>()
+    const kept = order.filter(id => p.parts[id] && !seen.has(id) && seen.add(id))
+    for (const id of p.partOrder) if (!seen.has(id)) kept.push(id)
+    if (kept.length !== order.length || kept.some((id, i) => id !== order[i])) warnings.push(`repaired the layer order of view ${view}`)
+    p.partOrderByView[view] = kept
+  }
+  return warnings
 }
 
 export function addVariant(p: Project, partId: Id, name?: string): PartVariant {
@@ -407,6 +470,12 @@ export function setViews(p: Project, count: number, mirror: boolean, elevationDe
   if (elevationDeg !== undefined && Number.isFinite(elevationDeg)) p.views.elevationDeg = Math.max(-60, Math.min(60, elevationDeg))
   if (depthScale !== undefined) p.views.depthScale = clampDepthScale(depthScale)
   const keep = new Set(authoredViews(p.views.count, p.views.mirror))
+  for (const key of Object.keys(p.partOrderByView)) {
+    if (!keep.has(Number(key))) {
+      delete p.partOrderByView[Number(key)]
+      warnings.push(`View ${key} no longer exists: its layer order was dropped`)
+    }
+  }
   for (const part of Object.values(p.parts)) {
     for (const v of Object.values(part.variants)) {
       for (const k of Object.keys(v.images)) {
@@ -458,6 +527,11 @@ export function validate(p: Project): string[] {
   const partIds = Object.keys(p.parts)
   if (partIds.length !== p.partOrder.length || partIds.some(id => !p.partOrder.includes(id))) errs.push('partOrder is not a permutation of parts')
   const authored = new Set(authoredViews(p.views.count, p.views.mirror))
+  for (const [key, order] of Object.entries(p.partOrderByView)) {
+    const view = Number(key)
+    if (!authored.has(view)) errs.push(`view ${view} has a layer order but is not authored`)
+    else if (!order || order.length !== p.partOrder.length || order.some(id => !p.parts[id]) || new Set(order).size !== order.length) errs.push(`view ${view} layer order is not a permutation of the parts`)
+  }
   for (const part of Object.values(p.parts)) {
     if (!bones[part.boneId]) errs.push(`part ${part.name} is on missing bone ${part.boneId}`)
     if (!part.variants[part.defaultVariant]) errs.push(`part ${part.name} default variant missing`)

@@ -198,6 +198,13 @@ export interface Project {
   parts: Record<Id, Part>
   /** Painter's order: first drawn first (bottom). */
   partOrder: Id[]
+  /**
+   * Views that stack their parts in their own order instead of `partOrder` —
+   * an arm in front of the body from the front, behind it from the back.
+   * Each entry is a permutation of `partOrder`. Only authored views may hold
+   * one, since a mirrored view draws its source view's frame.
+   */
+  partOrderByView: Partial<Record<ViewIndex, Id[]>>
   animations: Record<Id, Animation>
   animationOrder: Id[]
   export: { worldHeight: number }

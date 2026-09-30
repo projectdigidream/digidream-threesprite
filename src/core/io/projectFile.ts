@@ -7,7 +7,7 @@
 import { decode as decodePng, encode as encodePng } from 'fast-png'
 import { unzipSync, zipSync } from 'fflate'
 import { createPalette, DEFAULT_PALETTE, presetNameFor } from '../../domain/palette'
-import { clampDepthScale, repairPalettes, validate } from '../../domain/project'
+import { clampDepthScale, repairPalettes, repairPartOrders, validate } from '../../domain/project'
 import { FORMAT_VERSION, type PartImage, type Project, type RGBA } from '../../domain/types'
 import { composeFrame } from '../raster/rasterizer'
 
@@ -87,6 +87,8 @@ export function decodeProject(bytes: Uint8Array): DecodedProject {
     raw.views.depthScale = d && d > 0 ? clampDepthScale(1 / d) : 0
     delete (raw.views as { cameraDistance?: number }).cameraDistance
   }
+  if (!raw.partOrderByView) raw.partOrderByView = {}
+  warnings.push(...repairPartOrders(raw))
   const problems = validate(raw)
   if (problems.length) warnings.push(...problems.map(p => `Repairing: ${p}`))
   repairPalettes(raw)

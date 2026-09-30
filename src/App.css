@@ -285,6 +285,12 @@ input[type='text'], input:not([type]), input[inputmode] {
 .view-tab.is-active .view-tab__num { color: var(--accent); }
 .view-tab.is-derived { opacity: 0.6; }
 .view-tab.is-empty .view-tab__num { text-decoration: underline dotted; text-underline-offset: 3px; }
+/* a view that stacks its parts its own way */
+.view-tab.is-ordered { position: relative; }
+.view-tab.is-ordered::after {
+  content: ''; position: absolute; top: 3px; right: 3px;
+  width: 5px; height: 5px; border-radius: 50%; background: var(--accent-2);
+}
 
 /* ── dialogs ───────────────────────────────────────────────────────────────── */
 
@@ -300,6 +306,7 @@ input[type='text'], input:not([type]), input[inputmode] {
 .chip { min-height: 32px; padding: 0 10px; }
 .chip.is-active { background: var(--bg-4); border-color: var(--accent); color: var(--accent); }
 .chip-input { width: 84px; min-height: 32px; }
+.chip--sm { min-height: 24px; padding: 0 8px; font-size: 11px; }
 .modal__actions { display: flex; justify-content: flex-end; gap: 8px; }
 .warning { color: var(--accent); font-size: 12px; margin: 0; }
 .warning ul { margin: 4px 0 0; padding-left: 18px; }

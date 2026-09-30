@@ -8,6 +8,7 @@ export default function ViewStrip() {
   const view = useEditor(s => s.ui.view)
   const setUi = useEditor(s => s.setUi)
   const parts = useEditor(s => s.doc.parts)
+  const partOrderByView = useEditor(s => s.doc.partOrderByView)
   const selectedPartId = useEditor(s => s.ui.selectedPartId)
   const variantId = useEditor(s => s.ui.variantId)
 
@@ -20,13 +21,14 @@ export default function ViewStrip() {
         const derived = isDerived(N, mirror, k)
         const src = derived ? mirrorOf(N, k) : k
         const has = !!images?.[src]
+        const ordered = !!partOrderByView[src]
         return (
           <button
             key={k}
             role="tab"
             aria-selected={k === view}
-            className={`view-tab ${k === view ? 'is-active' : ''} ${derived ? 'is-derived' : ''} ${has ? '' : 'is-empty'}`}
-            title={`${viewLabel(N, k)} · ${Math.round(viewAngleDeg(N, k))}°${derived ? ` · mirrored from view ${src}` : ''}${has ? '' : ' · no image for this part'}`}
+            className={`view-tab ${k === view ? 'is-active' : ''} ${derived ? 'is-derived' : ''} ${has ? '' : 'is-empty'} ${ordered ? 'is-ordered' : ''}`}
+            title={`${viewLabel(N, k)} · ${Math.round(viewAngleDeg(N, k))}°${derived ? ` · mirrored from view ${src}` : ''}${has ? '' : ' · no image for this part'}${ordered ? ' · own layer order' : ''}`}
             onClick={() => setUi({ view: k })}
           >
             <span className="view-tab__num">{k}</span>
