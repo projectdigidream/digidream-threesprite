@@ -88,8 +88,8 @@ export function buildSkinGrid(img: PartImage, restMatrix: Mat2D, boneRests: Bone
 /**
  * Deformed canvas positions: Σ w_b · (cur_b · rest_b⁻¹) · restPos.
  *
- * With a camera distance in `vp`, each bone's frame also carries its own
- * depth scale, so the blend grows the end of the part that came towards the
+ * With depth scaling on in `vp`, each bone's frame also carries its own
+ * depth factor, so the blend grows the end of the part that came towards the
  * camera and leaves the end that did not — a hand reaching forward swells
  * while its shoulder stays put.
  */

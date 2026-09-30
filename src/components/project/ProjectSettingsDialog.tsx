@@ -1,6 +1,6 @@
 import { MAX_SPRITE_NAME } from '../../domain/types'
 import { useState } from 'react'
-import { clampCameraDistance, MAX_CAMERA_DISTANCE, MIN_CAMERA_DISTANCE, normalizeSpriteName, setViews } from '../../domain/project'
+import { clampDepthScale, MAX_DEPTH_SCALE, normalizeSpriteName, setViews } from '../../domain/project'
 import { authoredViewCount, clampViewCount, MAX_VIEWS, VIEW_PRESETS } from '../../domain/views'
 import { useEditor } from '../../store/editorStore'
 
@@ -13,15 +13,15 @@ export default function ProjectSettingsDialog({ onClose }: { onClose: () => void
   const [customViews, setCustomViews] = useState(VIEW_PRESETS.includes(doc.views.count as never) ? '' : String(doc.views.count))
   const [mirror, setMirror] = useState(doc.views.mirror)
   const [elevation, setElevation] = useState(String(doc.views.elevationDeg))
-  const [distance, setDistance] = useState(String(doc.views.cameraDistance))
+  const [depth, setDepth] = useState(String(doc.views.depthScale))
   const [worldHeight, setWorldHeight] = useState(String(doc.export.worldHeight))
   const [warnings, setWarnings] = useState<string[]>([])
 
   const effViews = customViews ? clampViewCount(Number(customViews)) : views
   const effElevation = Number.isFinite(Number(elevation)) ? Number(elevation) : doc.views.elevationDeg
-  const effDistance = Number.isFinite(Number(distance)) ? clampCameraDistance(Number(distance)) : doc.views.cameraDistance
+  const effDepth = Number.isFinite(Number(depth)) ? clampDepthScale(Number(depth)) : doc.views.depthScale
   const gridChanged = effViews !== doc.views.count || mirror !== doc.views.mirror
-  const viewsChanged = gridChanged || effElevation !== doc.views.elevationDeg || effDistance !== doc.views.cameraDistance
+  const viewsChanged = gridChanged || effElevation !== doc.views.elevationDeg || effDepth !== doc.views.depthScale
 
   const apply = () => {
     let w: string[] = []
@@ -30,7 +30,7 @@ export default function ProjectSettingsDialog({ onClose }: { onClose: () => void
       d.spriteName = normalizeSpriteName(spriteName)
       const h = Number(worldHeight)
       if (Number.isFinite(h) && h > 0) d.export.worldHeight = h
-      if (viewsChanged) w = setViews(d, effViews, mirror, effElevation, effDistance)
+      if (viewsChanged) w = setViews(d, effViews, mirror, effElevation, effDepth)
     })
     if (w.length) setWarnings(w)
     else onClose()
@@ -57,7 +57,7 @@ export default function ProjectSettingsDialog({ onClose }: { onClose: () => void
           <span>Mirror symmetry (author {authoredViewCount(effViews, mirror)} of {effViews} views)</span>
         </label>
         <label className="field"><span>Camera elevation (degrees above the horizon, for bones and solids in every view; 0 = level)</span><input inputMode="decimal" value={elevation} onChange={e => setElevation(e.target.value)} /></label>
-        <label className="field"><span>Camera distance (canvas heights; 0 = flat)</span><input inputMode="decimal" value={distance} onChange={e => setDistance(e.target.value)} /><small>How far the camera stands. Below {MAX_CAMERA_DISTANCE} a bone swung towards it grows what hangs off it and one swung away shrinks it; {MIN_CAMERA_DISTANCE} is as close as it gets. The rest pose never changes size.</small></label>
+        <label className="field"><span>Depth scaling (0 = off, up to {MAX_DEPTH_SCALE})</span><input inputMode="decimal" value={depth} onChange={e => setDepth(e.target.value)} /><small>How strongly a bone travelling towards the camera grows what hangs off it, and away shrinks it — pixel parts, each bone of a skinned part, and solids. Sprites move little in depth, so 1 is nearly invisible and 5–20 is where it reads. The rest pose never changes size.</small></label>
         {gridChanged && <p className="warning">Changing the view count drops images drawn for views that no longer exist. This is undoable.</p>}
         <label className="field"><span>World height (units, written into export manifests)</span><input inputMode="decimal" value={worldHeight} onChange={e => setWorldHeight(e.target.value)} /></label>
         {warnings.length > 0 && (

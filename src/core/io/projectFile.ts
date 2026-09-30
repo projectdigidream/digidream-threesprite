@@ -7,7 +7,7 @@
 import { decode as decodePng, encode as encodePng } from 'fast-png'
 import { unzipSync, zipSync } from 'fflate'
 import { createPalette, DEFAULT_PALETTE, presetNameFor } from '../../domain/palette'
-import { repairPalettes, validate } from '../../domain/project'
+import { clampDepthScale, repairPalettes, validate } from '../../domain/project'
 import { FORMAT_VERSION, type PartImage, type Project, type RGBA } from '../../domain/types'
 import { composeFrame } from '../raster/rasterizer'
 
@@ -81,7 +81,12 @@ export function decodeProject(bytes: Uint8Array): DecodedProject {
     }
   }
   if (raw.views.elevationDeg === undefined) raw.views.elevationDeg = 0
-  if (raw.views.cameraDistance === undefined) raw.views.cameraDistance = 0
+  if (raw.views.depthScale === undefined) {
+    // the setting shipped once as a camera distance in canvas heights
+    const d = (raw.views as { cameraDistance?: number }).cameraDistance
+    raw.views.depthScale = d && d > 0 ? clampDepthScale(1 / d) : 0
+    delete (raw.views as { cameraDistance?: number }).cameraDistance
+  }
   const problems = validate(raw)
   if (problems.length) warnings.push(...problems.map(p => `Repairing: ${p}`))
   repairPalettes(raw)
@@ -115,7 +120,7 @@ interface V1Transform { x: number; y: number; rotation: number; scaleX: number; 
 interface V1Project {
   formatVersion: number
   canvas: { size: number }
-  views: { count: number; mirror: boolean; elevationDeg?: number; cameraDistance?: number }
+  views: { count: number; mirror: boolean; elevationDeg?: number; depthScale?: number }
   skeleton: { bones: Record<string, { parentId: string | null; rest: unknown }> }
   animations: Record<string, { boneTracks: Record<string, { rotation: { value: unknown }[]; translate: { value: unknown }[]; scale: { value: unknown }[] }> }>
 }

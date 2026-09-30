@@ -183,11 +183,13 @@ export interface Project {
   canvas: { size: number }
   /**
    * `elevationDeg`: camera pitch above the horizon for every view (0 = level).
-   * `cameraDistance`: how far the camera stands, in canvas heights, which
-   * decides how much a bone moving towards it grows what hangs off it.
-   * 0 = flat, the projection every project had before the setting existed.
+   * `depthScale`: how strongly a bone travelling towards the camera grows
+   * what hangs off it — roughly the size change one canvas height of travel
+   * is worth. 0 = flat, the projection every project had before the setting
+   * existed. Sprites move very little in depth, so readable values are well
+   * above what a real camera would give.
    */
-  views: { count: number; mirror: boolean; elevationDeg: number; cameraDistance: number }
+  views: { count: number; mirror: boolean; elevationDeg: number; depthScale: number }
   palettes: Record<Id, Palette>
   paletteOrder: Id[]
   /** The palette shown in the Draw tab. Always one of `palettes`. */

@@ -2,63 +2,91 @@ import { describe, it, expect } from 'vitest'
 import { composeFrame } from '../../core/raster/rasterizer'
 import { setKey } from '../../domain/animation'
 import { createImage, opaqueBounds, setPixel } from '../../domain/image'
-import { depthScale, DEPTH_SCALE_MAX, DEPTH_SCALE_MIN, type ViewProj } from '../../domain/math3'
-import { addAnimation, addBone, addPart, clampCameraDistance, createProject, ensureBoneTrack, MAX_CAMERA_DISTANCE, MIN_CAMERA_DISTANCE, setPartSkin, setViews, validate } from '../../domain/project'
+import { depthFactor, DEPTH_SCALE_MAX, DEPTH_SCALE_MIN, type ViewProj } from '../../domain/math3'
+import { addAnimation, addBone, addPart, clampDepthScale, createProject, ensureBoneTrack, MAX_DEPTH_SCALE, setPartSkin, setViews, validate } from '../../domain/project'
+import { unzipSync, zipSync } from 'fflate'
+import { decodeProject, encodeProject } from '../../core/io/projectFile'
 import { addPrimitive, addSolidsPart } from '../../domain/solidsOps'
 import { BLUE, RED } from '../fixtures/pixels'
 
-const vp = (distance?: number): ViewProj => ({ N: 1, view: 1, size: 64, elevationDeg: 0, distance })
+const vp = (depthStrength?: number): ViewProj => ({ N: 1, view: 1, size: 64, elevationDeg: 0, depthStrength })
 
-describe('depthScale', () => {
+describe('depthFactor', () => {
   it('leaves a flat view alone', () => {
-    expect(depthScale(0, 40, vp())).toBe(1)
-    expect(depthScale(0, 40, vp(0))).toBe(1)
-    expect(depthScale(0, -40, vp(0))).toBe(1)
+    expect(depthFactor(0, 40, vp())).toBe(1)
+    expect(depthFactor(0, 40, vp(0))).toBe(1)
+    expect(depthFactor(0, -40, vp(0))).toBe(1)
   })
 
-  it('is the ratio of the two perspective divides', () => {
-    expect(depthScale(0, 16, vp(64))).toBeCloseTo(64 / 48)
-    expect(depthScale(0, -16, vp(64))).toBeCloseTo(64 / 80)
-    expect(depthScale(16, 0, vp(64))).toBeCloseTo(48 / 64)
+  it('is a perspective divide over the travel, in canvas heights', () => {
+    expect(depthFactor(0, 16, vp(1))).toBeCloseTo(4 / 3) // a quarter of a canvas closer
+    expect(depthFactor(0, -16, vp(1))).toBeCloseTo(0.8)
+    expect(depthFactor(0, 8, vp(1))).toBeCloseTo(8 / 7)
+  })
+
+  it('counts the travel, not where the thing sits', () => {
+    expect(depthFactor(100, 116, vp(1))).toBeCloseTo(depthFactor(0, 16, vp(1)))
+    expect(depthFactor(-50, -34, vp(1))).toBeCloseTo(depthFactor(0, 16, vp(1)))
   })
 
   it('is exactly 1 when nothing moved in depth, whatever the depth', () => {
-    for (const d of [-30, 0, 12, 55]) expect(depthScale(d, d, vp(64))).toBe(1)
+    for (const d of [-30, 0, 12, 55]) expect(depthFactor(d, d, vp(8))).toBe(1)
   })
 
-  it('never lets anything reach the lens or invert', () => {
-    expect(depthScale(0, 64, vp(64))).toBe(DEPTH_SCALE_MAX) // exactly at the camera
-    expect(depthScale(0, 200, vp(64))).toBe(DEPTH_SCALE_MAX) // behind it
-    expect(depthScale(0, -1e6, vp(64))).toBe(DEPTH_SCALE_MIN)
-    expect(depthScale(63, 0, vp(64))).toBe(DEPTH_SCALE_MIN)
+  it('the strength multiplies the travel', () => {
+    expect(depthFactor(0, 4, vp(4))).toBeCloseTo(depthFactor(0, 16, vp(1)))
+    expect(depthFactor(0, 2, vp(8))).toBeCloseTo(depthFactor(0, 16, vp(1)))
+    // which is the whole point: a sprite's few pixels of travel need a big strength to read
+    expect(depthFactor(0, 3.5, vp(1))).toBeLessThan(1.06)
+    expect(depthFactor(0, 3.5, vp(8))).toBeGreaterThan(1.5)
+  })
+
+  it('never inverts or runs away', () => {
+    expect(depthFactor(0, 64, vp(1))).toBe(DEPTH_SCALE_MAX) // a whole canvas of travel
+    expect(depthFactor(0, 200, vp(1))).toBe(DEPTH_SCALE_MAX)
+    expect(depthFactor(0, 10, vp(MAX_DEPTH_SCALE))).toBe(DEPTH_SCALE_MAX)
+    expect(depthFactor(0, -1e6, vp(1))).toBe(DEPTH_SCALE_MIN)
   })
 })
 
-describe('the camera distance setting', () => {
-  it('clamps to off or a usable range', () => {
-    expect(clampCameraDistance(0)).toBe(0)
-    expect(clampCameraDistance(-3)).toBe(0)
-    expect(clampCameraDistance(Number.NaN)).toBe(0)
-    expect(clampCameraDistance(0.01)).toBe(MIN_CAMERA_DISTANCE)
-    expect(clampCameraDistance(999)).toBe(MAX_CAMERA_DISTANCE)
-    expect(clampCameraDistance(2.5)).toBe(2.5)
+describe('the depth scaling setting', () => {
+  it('clamps to off or a usable strength', () => {
+    expect(clampDepthScale(0)).toBe(0)
+    expect(clampDepthScale(-3)).toBe(0)
+    expect(clampDepthScale(Number.NaN)).toBe(0)
+    expect(clampDepthScale(999)).toBe(MAX_DEPTH_SCALE)
+    expect(clampDepthScale(2.5)).toBe(2.5)
+    expect(clampDepthScale(7.77)).toBe(7.8)
+  })
+
+  it('carries a file saved with the first shape of the setting across', () => {
+    const p = createProject({ canvasSize: 32, viewCount: 4, mirror: false, starter: true })
+    const zip = unzipSync(encodeProject(p))
+    const raw = JSON.parse(new TextDecoder().decode(zip['project.json']))
+    delete raw.views.depthScale
+    raw.views.cameraDistance = 2 // the camera two canvas heights away it once shipped as
+    zip['project.json'] = new TextEncoder().encode(JSON.stringify(raw))
+    const { project: q, warnings } = decodeProject(zipSync(zip))
+    expect(warnings).toEqual([])
+    expect(q.views.depthScale).toBe(0.5) // the strength that draws the same
+    expect('cameraDistance' in q.views).toBe(false)
   })
 
   it('defaults to off and rides through setViews', () => {
     const p = createProject({ canvasSize: 32, starter: false })
-    expect(p.views.cameraDistance).toBe(0)
-    setViews(p, 8, true, 0, 3)
-    expect(p.views.cameraDistance).toBe(3)
+    expect(p.views.depthScale).toBe(0)
+    setViews(p, 8, true, 0, 6)
+    expect(p.views.depthScale).toBe(6)
     setViews(p, 8, true, 0) // left out: kept
-    expect(p.views.cameraDistance).toBe(3)
+    expect(p.views.depthScale).toBe(6)
     expect(validate(p)).toEqual([])
   })
 })
 
 /** A bar hanging off one bone, animated `f` pixels towards the camera on frame 1. */
-function barProject(cameraDistance: number, f: number) {
+function barProject(depthScale: number, f: number) {
   const p = createProject({ canvasSize: 64, viewCount: 1, mirror: false, starter: false })
-  p.views.cameraDistance = cameraDistance
+  p.views.depthScale = depthScale
   const bone = addBone(p, { name: 'arm', length: 20 })
   const img = createImage(8, 20)
   for (let y = 0; y < 20; y++) for (let x = 0; x < 8; x++) setPixel(img, x, y, RED)
@@ -85,7 +113,7 @@ describe('a rigid part in depth', () => {
   })
 
   it('grows when the bone comes towards the camera, about the bone\'s root', () => {
-    const { p, anim } = barProject(1, 16) // camera 64 px away, bone 16 px closer ⇒ 64/48
+    const { p, anim } = barProject(1, 16) // a quarter of the canvas closer ⇒ 4/3
     const rest = bounds(composeFrame(p, anim.id, 0, 1))
     const near = bounds(composeFrame(p, anim.id, 1, 1))
     expect(rest.w).toBe(8)
@@ -98,7 +126,7 @@ describe('a rigid part in depth', () => {
   })
 
   it('shrinks when it moves away', () => {
-    const { p, anim } = barProject(1, -16) // 64/80
+    const { p, anim } = barProject(1, -16) // ⇒ 0.8
     const rest = bounds(composeFrame(p, anim.id, 0, 1))
     const far = bounds(composeFrame(p, anim.id, 1, 1))
     expect(rest.w).toBe(8)
@@ -107,9 +135,9 @@ describe('a rigid part in depth', () => {
     expect(far.y + far.h).toBe(rest.y + rest.h)
   })
 
-  it('a farther camera makes the same move milder', () => {
+  it('a weaker strength makes the same move milder', () => {
     const close = barProject(1, 16)
-    const far = barProject(4, 16) // 256/240 instead of 64/48
+    const far = barProject(0.25, 16) // a quarter of the travel
     const near = bounds(composeFrame(close.p, close.anim.id, 1, 1))
     const mild = bounds(composeFrame(far.p, far.anim.id, 1, 1))
     expect(mild.w).toBeLessThan(near.w)
@@ -118,9 +146,9 @@ describe('a rigid part in depth', () => {
 })
 
 /** Upper arm + forearm under one image, the forearm alone moving in depth. */
-function armProject(cameraDistance: number) {
+function armProject(depthScale: number) {
   const p = createProject({ canvasSize: 64, viewCount: 1, mirror: false, starter: false })
-  p.views.cameraDistance = cameraDistance
+  p.views.depthScale = depthScale
   const upper = addBone(p, { name: 'upper', length: 20 })
   const fore = addBone(p, { name: 'fore', parentId: upper.id, rest: { position: { u: 20 } }, length: 20 })
   const img = createImage(6, 40)
@@ -166,9 +194,9 @@ describe('a skinned part in depth', () => {
 })
 
 /** A cube on a bone lifted clear of the ground, animated towards the camera. */
-function cubeProject(cameraDistance: number) {
+function cubeProject(depthScale: number) {
   const p = createProject({ canvasSize: 64, viewCount: 1, mirror: false, starter: false })
-  p.views.cameraDistance = cameraDistance
+  p.views.depthScale = depthScale
   const bone = addBone(p, { name: 'chest', length: 10, rest: { position: { u: 26 } } })
   const part = addSolidsPart(p, bone.id)
   addPrimitive(p, part.id, 'cube', RED, 16)
@@ -182,13 +210,13 @@ function cubeProject(cameraDistance: number) {
 describe('solids in depth', () => {
   it('draws the rest pose exactly as a flat project does', () => {
     const flat = cubeProject(0)
-    const deep = cubeProject(2)
+    const deep = cubeProject(0.5)
     expect(Array.from(composeFrame(deep.p, deep.anim.id, 0, 1))).toEqual(Array.from(composeFrame(flat.p, flat.anim.id, 0, 1)))
   })
 
   it('grows as the volume comes towards the camera', () => {
     const flat = cubeProject(0)
-    const deep = cubeProject(2)
+    const deep = cubeProject(0.5)
     const same = bounds(composeFrame(flat.p, flat.anim.id, 1, 1))
     const rest = bounds(composeFrame(flat.p, flat.anim.id, 0, 1))
     expect(same.w).toBe(rest.w) // orthographic on its own: moving in depth changed nothing

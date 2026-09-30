@@ -7,7 +7,7 @@
  */
 import { newId } from './ids'
 import { createImage } from './image'
-import { apply3, applyAffine, depthScale, dot3, eulerMatrix, mul3, normalize3, projectPoint, rotationOf3, viewAxes, type Mat34, type ViewProj } from './math3'
+import { apply3, applyAffine, depthFactor, dot3, eulerMatrix, mul3, normalize3, projectPoint, rotationOf3, viewAxes, type Mat34, type ViewProj } from './math3'
 import type { PartImage, Primitive, PrimitiveKind, RGBA, SolidsGroup, SolidsShading } from './types'
 
 export const PRIMITIVE_KINDS: PrimitiveKind[] = ['cube', 'sphere', 'cylinder', 'cone', 'pyramid']
@@ -165,10 +165,11 @@ export function outlineColor(color: RGBA): RGBA {
  * frame affine) into a canvas-sized image for one view. Pure and
  * deterministic.
  *
- * `rest` is the same bone in the rest pose. Given it and a camera distance,
- * every vertex is scaled about the bone's root by how far it travelled
- * towards the camera, so a volume swung forward swells and one swung away
- * shrinks. At rest the two affines agree and the image is untouched.
+ * `rest` is the same bone in the rest pose. Given it and a depth scaling
+ * strength, every vertex is scaled about the bone's root by how far it
+ * travelled towards the camera, so a volume swung forward swells and one
+ * swung away shrinks. At rest the two affines agree and the image is
+ * untouched.
  */
 export function renderSolids(group: SolidsGroup, world: Mat34, vp: ViewProj, rest?: Mat34): PartImage {
   const size = vp.size
@@ -179,7 +180,7 @@ export function renderSolids(group: SolidsGroup, world: Mat34, vp: ViewProj, res
   const axes = viewAxes(vp)
   const worldRot = rotationOf3(world)
   const root = projectPoint(applyAffine(world, { r: 0, u: 0, f: 0 }), vp)
-  const persp = rest && (vp.distance ?? 0) > 0 ? { rest, ox: root.x, oy: root.y } : null
+  const persp = rest && (vp.depthStrength ?? 0) > 0 ? { rest, ox: root.x, oy: root.y } : null
 
   // light in view space (x right, y up, z towards the camera)
   let L = [-0.45, 0.75, 0.55]
@@ -204,7 +205,7 @@ export function renderSolids(group: SolidsGroup, world: Mat34, vp: ViewProj, res
       const pr = projectPoint(applyAffine(world, lp), vp)
       let px = pr.x, py = pr.y
       if (persp) {
-        const k = depthScale(projectPoint(applyAffine(persp.rest, lp), vp).depth, pr.depth, vp)
+        const k = depthFactor(projectPoint(applyAffine(persp.rest, lp), vp).depth, pr.depth, vp)
         px = persp.ox + (px - persp.ox) * k
         py = persp.oy + (py - persp.oy) * k
       }

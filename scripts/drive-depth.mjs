@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Drives the camera-distance setting: a skinned arm whose forearm swings
- * towards the viewer, measured on the real canvas with the distance off and
+ * Drives the depth-scaling setting: a skinned arm whose forearm travels
+ * towards the viewer, measured on the real canvas with the setting off and
  * then on, set through the Project settings dialog.
  *   pnpm dev &   then   node scripts/drive-depth.mjs [outDir]
  */
@@ -84,13 +84,13 @@ console.log('flat  rest', JSON.stringify(flatRest), 'reach', JSON.stringify(flat
 // Set the camera distance through the dialog the artist would use.
 await page.locator('[aria-label="Project settings"]').first().click()
 await page.waitForSelector('[aria-label="Project settings"][role="dialog"]', { timeout: 5000 })
-const field = page.locator('.field:has-text("Camera distance") input')
-await field.fill('2')
+const field = page.locator('.field:has-text("Depth scaling") input')
+await field.fill('8')
 await shot('settings-dialog')
 await page.locator('.modal__actions button.primary').click()
 await page.waitForTimeout(300)
-const distance = await page.evaluate(() => window.__editorStore.getState().doc.views.cameraDistance)
-console.log('camera distance now', distance)
+const distance = await page.evaluate(() => window.__editorStore.getState().doc.views.depthScale)
+console.log('depth scaling now', distance)
 
 const deepRest = await measure(0)
 await shot('deep-rest')
@@ -106,7 +106,7 @@ await shot('studio-reach')
 await browser.close()
 
 const fail = []
-if (distance !== 2) fail.push(`the dialog did not apply the distance (got ${distance})`)
+if (distance !== 8) fail.push(`the dialog did not apply the strength (got ${distance})`)
 if (!flatRest || !flatReach || !deepRest || !deepReach) fail.push('the arm was not found on the canvas')
 else {
   if (flatReach.w !== flatRest.w || flatReach.h !== flatRest.h) fail.push('the flat projection changed with depth')
@@ -116,4 +116,4 @@ else {
 }
 if (errors.length) fail.push('page errors:\n' + errors.join('\n'))
 if (fail.length) { console.error('FAILED:\n' + fail.join('\n')); process.exit(1) }
-console.log(`ok: flat ${flatRest.w}×${flatRest.h} unchanged by depth; at distance 2 the reach grew ${deepRest.w}×${deepRest.h} → ${deepReach.w}×${deepReach.h}`)
+console.log(`ok: flat ${flatRest.w}×${flatRest.h} unchanged by depth; at strength 8 the reach grew ${deepRest.w}×${deepRest.h} → ${deepReach.w}×${deepReach.h}`)

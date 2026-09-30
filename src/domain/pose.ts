@@ -4,7 +4,7 @@
  * the bone's PROJECTED 2D frame in each view; solids hang off its 3D frame.
  */
 import { lerpVec3, sampleTrack, stepOnly } from './animation'
-import { add3, affine, applyAffine, composeAffine, depthScale, eulerMatrix, mul3, projectPoint, projectedAngle, scaleMatrix, type Mat34, type ViewProj } from './math3'
+import { add3, affine, applyAffine, composeAffine, depthFactor, eulerMatrix, mul3, projectPoint, projectedAngle, scaleMatrix, type Mat34, type ViewProj } from './math3'
 import { compose, rotate, scale as scale2, translate, type Mat2D } from './transform'
 import type { Animation, Bone, Id, Part, Project, Skeleton, Vec3 } from './types'
 import { ONE3, ZERO3 } from './types'
@@ -80,11 +80,11 @@ export function projectBone(world: Mat34, length: number, vp: ViewProj, fallback
  * How much a bone's motion towards or away from the camera grows what hangs
  * off it. The reference is the bone's middle, so both bodily movement in
  * depth and a swing that brings the tip forward count, and a rig drawn at
- * rest — or a project with no camera distance — always gives exactly 1.
+ * rest — or a project with depth scaling off — always gives exactly 1.
  */
 export function boneDepthScale(rest: BoneProjection, cur: BoneProjection, vp?: ViewProj): number {
   if (!vp) return 1
-  return depthScale((rest.depth + rest.tipDepth) / 2, (cur.depth + cur.tipDepth) / 2, vp)
+  return depthFactor((rest.depth + rest.tipDepth) / 2, (cur.depth + cur.tipDepth) / 2, vp)
 }
 
 /**
@@ -103,7 +103,7 @@ export function partMatrix(rest: BoneProjection, cur: BoneProjection, part: Part
 }
 
 export function viewProj(p: Project, view: number): ViewProj {
-  return { N: p.views.count, view, size: p.canvas.size, elevationDeg: p.views.elevationDeg, distance: p.views.cameraDistance * p.canvas.size }
+  return { N: p.views.count, view, size: p.canvas.size, elevationDeg: p.views.elevationDeg, depthStrength: p.views.depthScale }
 }
 
 /** Rest-pose projected angle of a bone in a view (used to keep new part images upright). */

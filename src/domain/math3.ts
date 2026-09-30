@@ -138,11 +138,11 @@ export interface ViewProj {
   /** Camera elevation above the horizon, degrees. */
   elevationDeg: number
   /**
-   * How far the camera stands, in pixels. The projection itself stays
-   * orthographic; the distance only says how much closing that distance
-   * grows a thing. 0 or absent = flat, nothing changes size with depth.
+   * How strongly travel towards the camera grows a thing: the size change a
+   * full canvas height of travel is worth. 0 or absent = flat, nothing
+   * changes size with depth.
    */
-  distance?: number
+  depthStrength?: number
 }
 
 export interface Projected { x: number; y: number; depth: number }
@@ -167,16 +167,21 @@ export const DEPTH_SCALE_MAX = 4
 
 /**
  * How much bigger something at `curDepth` looks than the same thing at
- * `restDepth`, for a camera `vp.distance` pixels away: the ratio of the two
- * perspective divides, so a flat view — or anything that has not moved in
- * depth — gives exactly 1 and draws as it always did.
+ * `restDepth`: a perspective divide over the distance travelled towards the
+ * camera, measured in canvas heights and scaled by `vp.depthStrength`.
+ *
+ * It is the travel that counts, not where the thing sits, so the rest pose is
+ * always exactly 1 and the whole rig stays predictable. Strength 1 is about
+ * what a camera one canvas height away would do; sprites move so little in
+ * depth that anything readable wants more, which is why this is a strength
+ * and not a camera distance.
  */
-export function depthScale(restDepth: number, curDepth: number, vp: ViewProj): number {
-  const d = vp.distance ?? 0
-  if (!(d > 0)) return 1
-  const near = d * 0.2 // nothing is ever allowed to reach the lens
-  const k = Math.max(near, d - restDepth) / Math.max(near, d - curDepth)
-  return Math.max(DEPTH_SCALE_MIN, Math.min(DEPTH_SCALE_MAX, k))
+export function depthFactor(restDepth: number, curDepth: number, vp: ViewProj): number {
+  const s = vp.depthStrength ?? 0
+  if (!(s > 0)) return 1
+  const travel = (s * (curDepth - restDepth)) / vp.size
+  if (travel >= 1) return DEPTH_SCALE_MAX // past the lens: hold it at the limit
+  return Math.max(DEPTH_SCALE_MIN, Math.min(DEPTH_SCALE_MAX, 1 / (1 - travel)))
 }
 
 /** Canvas point at a given depth → character-frame point (inverse of `projectPoint`). */
