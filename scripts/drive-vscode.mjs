@@ -251,7 +251,8 @@ expect(await page.locator('.export__format').count() > 0, 'the export panel rend
   expect(await dialog.count() === 1, 'an empty file opens the new-sprite setup')
   const nameField = dialog.locator('input').first()
   expect(await nameField.inputValue() === 'hero', `the project is named after the file (${await nameField.inputValue()})`)
-  expect(await dialog.locator('input[maxlength="4"]').inputValue() === 'HERO', 'the sprite code follows the name')
+  const idField = dialog.locator('.field', { hasText: 'Sprite id' }).locator('input')
+  expect(await idField.inputValue() === 'hero', `the sprite id follows the name (${await idField.inputValue()})`)
   expect(!(await sent()).includes('error'), 'no error is reported for the empty file')
   await fresh.screenshot({ path: join(outDir, 'vscode-03-new-sprite.png') })
 
