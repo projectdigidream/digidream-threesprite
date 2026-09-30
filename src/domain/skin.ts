@@ -6,8 +6,8 @@
  * (current projected frame × inverse rest frame). The deformed grid is drawn
  * as textured triangles with nearest sampling, so the art stays crisp.
  */
-import type { ViewProj } from './math3'
-import { boneDepthScale, type BoneProjection } from './pose'
+import { depthFactor, type ViewProj } from './math3'
+import type { BoneProjection } from './pose'
 import { apply, compose, invert, rotate, scale, translate, type Mat2D } from './transform'
 import type { PartImage } from './types'
 
@@ -88,10 +88,12 @@ export function buildSkinGrid(img: PartImage, restMatrix: Mat2D, boneRests: Bone
 /**
  * Deformed canvas positions: Σ w_b · (cur_b · rest_b⁻¹) · restPos.
  *
- * With depth scaling on in `vp`, each bone's frame also carries its own
- * depth factor, so the blend grows the end of the part that came towards the
- * camera and leaves the end that did not — a hand reaching forward swells
- * while its shoulder stays put.
+ * With depth scaling on in `vp`, each bone also tapers what it carries. A
+ * bone leaning towards the camera has its tip much closer than its root, so
+ * the depth is read along the bone — at each vertex's own place on it — and
+ * the vertex is scaled about that bone's root by its own factor. The root
+ * itself never moves, which is what keeps a chain of bones together, and the
+ * end that came forward swells while the end that did not stays as drawn.
  */
 export function deformGrid(grid: SkinGrid, boneRests: BoneProjection[], boneCurs: BoneProjection[], foreshorten: boolean, vp?: ViewProj): Float32Array {
   const nb = boneRests.length
@@ -101,11 +103,17 @@ export function deformGrid(grid: SkinGrid, boneRests: BoneProjection[], boneCurs
     const cu = boneCurs[b]
     const fs = foreshorten && r.length >= 0.5 ? Math.max(0.15, Math.min(4, cu.length / r.length)) : 1
     const angle = cu.length < 0.5 ? r.angle : cu.angle
-    const ds = boneDepthScale(r, cu, vp)
-    const curFrame = compose(translate(cu.origin.x, cu.origin.y), scale(ds, ds), rotate(angle), scale(fs, 1))
+    const curFrame = compose(translate(cu.origin.x, cu.origin.y), rotate(angle), scale(fs, 1))
     const inv = invert(boneFrame(r, 1))
     deltas.push(inv ? compose(curFrame, inv) : { a: 1, b: 0, c: 0, d: 1, tx: 0, ty: 0 })
   }
+  // where along each bone (0 at the root, 1 at the tip) a rest position sits,
+  // which is where its depth is read from
+  const scaling = !!vp && (vp.depthStrength ?? 0) > 0
+  const axes = boneRests.map(r => {
+    const dx = r.tip.x - r.origin.x, dy = r.tip.y - r.origin.y
+    return { ox: r.origin.x, oy: r.origin.y, dx, dy, l2: dx * dx + dy * dy }
+  })
   const nv = grid.rest.length / 2
   const out = new Float32Array(nv * 2)
   for (let k = 0; k < nv; k++) {
@@ -115,8 +123,20 @@ export function deformGrid(grid: SkinGrid, boneRests: BoneProjection[], boneCurs
       const w = grid.weights[k * nb + b]
       if (w === 0) continue
       const m = deltas[b]
-      ox += w * (m.a * x + m.c * y + m.tx)
-      oy += w * (m.b * x + m.d * y + m.ty)
+      let px = m.a * x + m.c * y + m.tx
+      let py = m.b * x + m.d * y + m.ty
+      if (scaling) {
+        const a = axes[b]
+        const t = a.l2 > 1e-6 ? ((x - a.ox) * a.dx + (y - a.oy) * a.dy) / a.l2 : 0
+        const r = boneRests[b], cu = boneCurs[b]
+        const ds = depthFactor(r.depth + t * (r.tipDepth - r.depth), cu.depth + t * (cu.tipDepth - cu.depth), vp!)
+        if (ds !== 1) {
+          px = cu.origin.x + (px - cu.origin.x) * ds
+          py = cu.origin.y + (py - cu.origin.y) * ds
+        }
+      }
+      ox += w * px
+      oy += w * py
     }
     out[k * 2] = ox
     out[k * 2 + 1] = oy

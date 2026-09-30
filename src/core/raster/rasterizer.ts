@@ -8,7 +8,7 @@
  * solids parts render live from the bone's 3D frame.
  */
 import { flipXPixelsInPlace } from '../../domain/image'
-import { evalPose, partMatrix, projectBone, samplePart, viewProj, type BoneProjection } from '../../domain/pose'
+import { boneDepthTapers, evalPose, partMatrix, projectBone, samplePart, viewProj, type BoneProjection } from '../../domain/pose'
 import { buildSkinGrid, deformGrid, gridIsAtRest, rasterizeSkinnedGrid } from '../../domain/skin'
 import { renderSolids } from '../../domain/solids'
 import { IDENTITY, invert, type Mat2D } from '../../domain/transform'
@@ -145,9 +145,11 @@ export function composeFrame(project: Project, animId: Id | null, frame: number,
     const rp = projectBone(restWorld, bone.length, vp)
     const cp = anim ? projectBone(world, bone.length, vp, rp.angle) : rp
 
-    // skinning: several bones bend the image; falls back to the exact rigid blit at rest
+    // skinning: several bones bend the image; falls back to the exact rigid
+    // blit at rest. A single bone leaning towards the camera comes through
+    // here too, because the taper it puts on the part is not a matrix.
     const extra = part.skin ? part.skin.bones.filter(id => id !== part.boneId && project.skeleton.bones[id] && pose.has(id) && rest.has(id)) : []
-    if (anim && extra.length) {
+    if (anim && (extra.length || boneDepthTapers(rp, cp, vp))) {
       const restProj: BoneProjection[] = [rp]
       const curProj: BoneProjection[] = [cp]
       for (const id of extra) {
@@ -157,7 +159,7 @@ export function composeFrame(project: Project, animId: Id | null, frame: number,
         curProj.push(projectBone(pose.get(id)!, b.length, vp, r.angle))
       }
       const restM = partMatrix(rp, rp, part)
-      const grid = buildSkinGrid(img, restM, restProj, part.skin!.falloff, part.skin!.cell)
+      const grid = buildSkinGrid(img, restM, restProj, part.skin?.falloff ?? size, part.skin?.cell ?? 4)
       const posArr = deformGrid(grid, restProj, curProj, part.foreshorten, vp)
       if (!gridIsAtRest(grid, posArr)) {
         rasterizeSkinnedGrid(out, size, size, img, grid, posArr, alpha)

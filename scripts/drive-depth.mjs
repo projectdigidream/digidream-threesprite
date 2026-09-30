@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Drives the depth-scaling setting: a skinned arm whose forearm travels
- * towards the viewer, measured on the real canvas with the setting off and
+ * Drives the depth-scaling setting: a skinned arm whose forearm swings its
+ * tip at the viewer, measured on the real canvas with the setting off and
  * then on, set through the Project settings dialog.
  *   pnpm dev &   then   node scripts/drive-depth.mjs [outDir]
  */
@@ -46,7 +46,7 @@ await page.evaluate(() => {
     d.parts.arm = { id: 'arm', name: 'arm', boneId: upper.id, offset: { x: 0, y: 0 }, rotation: -90, pivot: { x: 5, y: 40 }, foreshorten: true, variants: { [vid]: { id: vid, name: 'default', images: { 1: { width: w, height: h, pixels: px } } } }, variantOrder: [vid], defaultVariant: vid, skin: { bones: [fore.id], falloff: 12, cell: 4 } }
     d.partOrder.push('arm')
     const anim = { id: 'reach', name: 'reach', fps: 8, loop: true, frameCount: 4, boneTracks: {}, partTracks: {} }
-    anim.boneTracks[fore.id] = { rotation: [], translate: [{ frame: 0, value: { r: 0, u: 0, f: 0 }, interp: 'linear' }, { frame: 3, value: { r: 0, u: 0, f: 18 }, interp: 'linear' }], scale: [] }
+    anim.boneTracks[fore.id] = { rotation: [{ frame: 0, value: { r: 0, u: 0, f: 0 }, interp: 'linear' }, { frame: 3, value: { r: -70, u: 0, f: 0 }, interp: 'linear' }], translate: [], scale: [] }
     d.animations.reach = anim
     d.animationOrder.push('reach')
   })
@@ -85,7 +85,7 @@ console.log('flat  rest', JSON.stringify(flatRest), 'reach', JSON.stringify(flat
 await page.locator('[aria-label="Project settings"]').first().click()
 await page.waitForSelector('[aria-label="Project settings"][role="dialog"]', { timeout: 5000 })
 const field = page.locator('.field:has-text("Depth scaling") input')
-await field.fill('8')
+await field.fill('4')
 await shot('settings-dialog')
 await page.locator('.modal__actions button.primary').click()
 await page.waitForTimeout(300)
@@ -106,14 +106,14 @@ await shot('studio-reach')
 await browser.close()
 
 const fail = []
-if (distance !== 8) fail.push(`the dialog did not apply the strength (got ${distance})`)
+if (distance !== 4) fail.push(`the dialog did not apply the strength (got ${distance})`)
 if (!flatRest || !flatReach || !deepRest || !deepReach) fail.push('the arm was not found on the canvas')
 else {
-  if (flatReach.w !== flatRest.w || flatReach.h !== flatRest.h) fail.push('the flat projection changed with depth')
+  if (flatReach.w !== flatRest.w) fail.push('the flat projection changed width with depth')
   if (deepRest.w !== flatRest.w || deepRest.h !== flatRest.h) fail.push('the rest pose changed when the distance was set')
   if (!(deepReach.w > deepRest.w)) fail.push(`reaching forward did not widen the arm (${deepRest.w} → ${deepReach.w})`)
   if (Math.abs(deepReach.bottom - deepRest.bottom) > 2) fail.push('the shoulder end drifted')
 }
 if (errors.length) fail.push('page errors:\n' + errors.join('\n'))
 if (fail.length) { console.error('FAILED:\n' + fail.join('\n')); process.exit(1) }
-console.log(`ok: flat ${flatRest.w}×${flatRest.h} unchanged by depth; at strength 8 the reach grew ${deepRest.w}×${deepRest.h} → ${deepReach.w}×${deepReach.h}`)
+console.log(`ok: flat ${flatRest.w} wide whatever the depth; at strength 4 the swing grew ${deepRest.w}×${deepRest.h} → ${deepReach.w}×${deepReach.h}`)

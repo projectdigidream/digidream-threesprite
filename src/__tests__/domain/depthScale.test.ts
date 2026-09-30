@@ -6,6 +6,7 @@ import { depthFactor, DEPTH_SCALE_MAX, DEPTH_SCALE_MIN, type ViewProj } from '..
 import { addAnimation, addBone, addPart, clampDepthScale, createProject, ensureBoneTrack, MAX_DEPTH_SCALE, setPartSkin, setViews, validate } from '../../domain/project'
 import { unzipSync, zipSync } from 'fflate'
 import { decodeProject, encodeProject } from '../../core/io/projectFile'
+import { boneDepthTapers, evalPose, projectBone, viewProj } from '../../domain/pose'
 import { addPrimitive, addSolidsPart } from '../../domain/solidsOps'
 import { BLUE, RED } from '../fixtures/pixels'
 
@@ -223,5 +224,83 @@ describe('solids in depth', () => {
     const near = bounds(composeFrame(deep.p, deep.anim.id, 1, 1))
     expect(near.w).toBeGreaterThan(same.w)
     expect(near.h).toBeGreaterThan(same.h)
+  })
+})
+
+/** A bar on a bone that swings its tip towards the camera on frame 1. */
+function pitchProject(depthScale: number, pitch = -60) {
+  const p = createProject({ canvasSize: 64, viewCount: 1, mirror: false, starter: false })
+  p.views.depthScale = depthScale
+  const bone = addBone(p, { name: 'arm', length: 20 })
+  const img = createImage(8, 20)
+  for (let y = 0; y < 20; y++) for (let x = 0; x < 8; x++) setPixel(img, x, y, RED)
+  addPart(p, { boneId: bone.id, image: img, pivot: { x: 4, y: 20 } })
+  const anim = addAnimation(p, { frameCount: 2 })
+  const track = ensureBoneTrack(anim, bone.id).rotation
+  setKey(track, 0, { r: 0, u: 0, f: 0 })
+  setKey(track, 1, { r: pitch, u: 0, f: 0 }) // negative pitch tips the tip towards the viewer
+  return { p, anim, bone }
+}
+
+/** The rows a part covers, top to bottom, as opaque pixel counts. */
+function rowWidths(px: Uint8ClampedArray): { y: number; w: number }[] {
+  const rows: { y: number; w: number }[] = []
+  for (let y = 0; y < 64; y++) {
+    const w = rowWidth(px, y)
+    if (w > 0) rows.push({ y, w })
+  }
+  return rows
+}
+
+describe('a bone leaning in depth', () => {
+  it('is recognised as a taper, while a bodily move in depth is not', () => {
+    const { p, anim, bone } = pitchProject(1)
+    const vp = viewProj(p, 1)
+    const rest = evalPose(p.skeleton, null, 0).get(bone.id)!
+    const turned = evalPose(p.skeleton, anim, 1).get(bone.id)!
+    const rp = projectBone(rest, 20, vp)
+    const cp = projectBone(turned, 20, vp, rp.angle)
+    expect(cp.tipDepth).toBeGreaterThan(15) // the tip really did come forward
+    expect(cp.depth).toBe(rp.depth) // the root did not move
+    expect(boneDepthTapers(rp, cp, vp)).toBe(true)
+    expect(boneDepthTapers(rp, cp, viewProj(pitchProject(0).p, 1))).toBe(false) // scaling off
+    const moved = barProject(1, 16)
+    const mvp = viewProj(moved.p, 1)
+    const mb = Object.keys(moved.p.skeleton.bones)[0]
+    const mr = projectBone(evalPose(moved.p.skeleton, null, 0).get(mb)!, 20, mvp)
+    const mc = projectBone(evalPose(moved.p.skeleton, moved.anim, 1).get(mb)!, 20, mvp, mr.angle)
+    expect(boneDepthTapers(mr, mc, mvp)).toBe(false) // both ends travelled alike
+  })
+
+  it('only foreshortens while depth scaling is off', () => {
+    const { p, anim } = pitchProject(0)
+    const rows = rowWidths(composeFrame(p, anim.id, 1, 1))
+    expect(rows.length).toBeGreaterThan(6) // foreshortened from 20 rows to about 10
+    expect(rows.length).toBeLessThan(14)
+    for (const r of rows) expect(r.w, `row ${r.y}`).toBe(8) // every row as drawn
+  })
+
+  it('tapers: the end that came forward is wider than the end at the joint', () => {
+    const { p, anim } = pitchProject(1)
+    const rows = rowWidths(composeFrame(p, anim.id, 1, 1))
+    const root = rows[rows.length - 1] // the bone's root is at the feet, the bottom row
+    const tip = rows[0]
+    expect(root.w).toBe(8) // pinned to the rig, exactly as drawn
+    expect(tip.w).toBeGreaterThanOrEqual(10) // 8 × 1.37, less whatever the pixel grid rounds off
+    // and it grows monotonically from the joint to the tip
+    for (let i = 1; i < rows.length; i++) expect(rows[i].w).toBeLessThanOrEqual(rows[i - 1].w)
+  })
+
+  it('swinging away from the camera narrows the far end instead', () => {
+    const { p, anim } = pitchProject(1, 60)
+    const rows = rowWidths(composeFrame(p, anim.id, 1, 1))
+    expect(rows[rows.length - 1].w).toBe(8)
+    expect(rows[0].w).toBeLessThan(8)
+  })
+
+  it('still draws the rest pose exactly', () => {
+    const flat = pitchProject(0)
+    const deep = pitchProject(1)
+    expect(Array.from(composeFrame(deep.p, deep.anim.id, 0, 1))).toEqual(Array.from(composeFrame(flat.p, flat.anim.id, 0, 1)))
   })
 })

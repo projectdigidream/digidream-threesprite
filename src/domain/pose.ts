@@ -88,6 +88,17 @@ export function boneDepthScale(rest: BoneProjection, cur: BoneProjection, vp?: V
 }
 
 /**
+ * Whether a bone's two ends travelled differently in depth, so what hangs off
+ * it tapers along the bone instead of changing size evenly. True for a bone
+ * that swung towards or away from the camera, false for one that merely moved
+ * bodily in depth — that one a single matrix still draws exactly.
+ */
+export function boneDepthTapers(rest: BoneProjection, cur: BoneProjection, vp?: ViewProj): boolean {
+  if (!vp || !((vp.depthStrength ?? 0) > 0)) return false
+  return Math.abs((cur.tipDepth - rest.tipDepth) - (cur.depth - rest.depth)) > 0.01
+}
+
+/**
  * Image-pixel → canvas matrix of a pixel part in one view:
  * T(origin) · S(depth) · R(angle) · S(foreshorten, 1) · T(offset) · R(part.rotation) · T(−pivot).
  * `rest` is the bone's projection in the rest pose (what the artist drew against).
