@@ -52,16 +52,26 @@ export default function MobileLayout() {
     )
   }
 
+  // One tree for both orientations: in portrait the three wrappers are
+  // `display: contents`, so everything stacks under the canvas exactly as it
+  // always did; in landscape the body turns into a row and the rail becomes a
+  // column of panels down the right-hand side.
   return (
     <div className={`mobile mobile--${mode}`}>
-      {canvasMode && <ViewStrip />}
-      <div className="mobile__main">
-        {canvasMode ? <PixelCanvas /> : <ModePane mode={mode} />}
+      <div className="mobile__body">
+        <div className="mobile__col">
+          {canvasMode && <ViewStrip />}
+          <div className="mobile__main">
+            {canvasMode ? <PixelCanvas /> : <ModePane mode={mode} />}
+          </div>
+        </div>
+        <div className="mobile__rail">
+          {mode === 'draw' && sheetPane}
+          {mode === 'draw' && strips}
+          {mode === 'rig' && <div className="mobile__sheet"><ModePane mode={mode} side /><PartList /></div>}
+          {mode === 'animate' && <div className="mobile__sheet"><ModePane mode={mode} bottom /><ModePane mode={mode} side /></div>}
+        </div>
       </div>
-      {mode === 'draw' && sheetPane}
-      {mode === 'draw' && strips}
-      {mode === 'rig' && <div className="mobile__sheet"><ModePane mode={mode} side /><PartList /></div>}
-      {mode === 'animate' && <div className="mobile__sheet"><ModePane mode={mode} bottom /><ModePane mode={mode} side /></div>}
       <TabBar bottom />
     </div>
   )

@@ -166,6 +166,39 @@ input[type='text'], input:not([type]), input[inputmode] {
 .mobile__main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .mobile__strips { flex: none; border-top: 1px solid var(--border); background: var(--bg-2); }
 .mobile__sheet { flex: none; max-height: 45%; overflow: auto; border-top: 1px solid var(--border); background: var(--bg-2); }
+/* Upright, the wrappers are not there at all: everything stacks under the
+   canvas as one column. Held sideways, height is what runs out, so the body
+   becomes a row and the panels move into a rail down the right. */
+.mobile__body, .mobile__col, .mobile__rail { display: contents; }
+
+@media (orientation: landscape) {
+  .mobile__body { display: flex; flex: 1; min-height: 0; flex-direction: row; }
+  .mobile__col { display: flex; flex: 1; min-width: 0; min-height: 0; flex-direction: column; }
+  .mobile__rail {
+    display: flex; flex-direction: column; flex: none;
+    width: min(46%, 360px); min-height: 0; overflow: hidden;
+    border-left: 1px solid var(--border); background: var(--bg-2);
+  }
+  .mobile__rail:empty { display: none; }
+  /* The tools lead and keep their touch size. Only the tool buttons give way
+     when the rail is short — they scroll inside their own share — so the
+     colours stay in sight and the panel below always has room. */
+  .mobile__rail .mobile__strips {
+    order: -1; flex: none; max-height: 62%; display: flex; flex-direction: column; overflow: hidden;
+    border-top: none; border-bottom: 1px solid var(--border);
+  }
+  .mobile__rail .mobile__strips:only-child { max-height: none; border-bottom: none; }
+  .mobile__rail .mobile__strip-row { flex: 0 1 auto; min-height: 0; flex-wrap: nowrap; align-items: stretch; }
+  /* the two sheet toggles stay put at the top while the tools scroll past them */
+  .mobile__rail .mobile__strip-row > .icon-btn { flex: none; align-self: flex-start; }
+  .mobile__rail .palette { flex: none; }
+  .mobile__rail .mobile__sheet { flex: 1; min-height: 0; max-height: none; border-top: none; }
+  /* a rail is narrow: the tool buttons wrap down it instead of scrolling sideways */
+  .mobile__rail .tool-panel--h { flex: 1 1 auto; min-width: 0; flex-wrap: wrap; overflow-x: visible; overflow-y: auto; }
+  .mobile__rail .part-list__rows,
+  .mobile__rail .bone-tree__rows,
+  .mobile__rail .solids__rows { max-height: none; }
+}
 
 /* ── canvas ────────────────────────────────────────────────────────────────── */
 
@@ -386,8 +419,10 @@ input[type='text'], input:not([type]), input[inputmode] {
 .studio-mobile__2d { flex: 1.1; min-height: 0; display: flex; flex-direction: column; }
 @media (orientation: landscape) {
   .studio-mobile { flex-direction: row; }
-  .studio-mobile__3d { flex: 1; border-bottom: none; border-right: 1px solid var(--border); }
-  .studio-mobile__2d { flex: 1; }
+  /* without a floor of 0 the view strip and tool row hold the 2D pane open and
+     push the pair wider than the screen */
+  .studio-mobile__3d { flex: 1; min-width: 0; border-bottom: none; border-right: 1px solid var(--border); }
+  .studio-mobile__2d { flex: 1; min-width: 0; }
 }
 
 /* keep the 3D viewport tall on phones: the transport scrolls sideways instead of wrapping */
