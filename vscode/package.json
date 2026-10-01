@@ -2,7 +2,7 @@
   "name": "prspr-vscode",
   "displayName": "PrSpr editor",
   "description": "Edit animated multi-view sprite projects (.tsprite) in an editor tab.",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "publisher": "digidream",
   "private": true,
   "license": "MIT",
