@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { exportPaletteFile, importPaletteFile } from '../../core/io/paletteActions'
+import { exportPaletteFile, importPaletteFile, type PaletteFormat } from '../../core/io/paletteActions'
 import { askConfirm, askText, notice } from '../../core/ui/dialogs'
 import {
   activePalette, addColor, collectImageColors, hexToRgba, insertColor, moveColor, PRESET_PALETTES, recolorProject, removeColor, rgbaToHex,
-  sameColor, sortColors, uniquePaletteName, type PalettePreset,
+  sameColor, sortColors, uniquePaletteName, usedColors, type PalettePreset,
 } from '../../domain/palette'
 import { addPalette, duplicatePalette, removePalette, renamePalette, setActivePalette } from '../../domain/project'
 import type { Id, Project, RGBA } from '../../domain/types'
@@ -146,20 +146,31 @@ export default function PaletteEditor({ onClose }: Props) {
     const ok = await askConfirm(`Delete "${pal.name}"?`, { message: 'Pixels keep their colours; only this list of swatches goes.', okLabel: 'Delete', danger: true })
     if (ok) { commit('Delete palette', d => { removePalette(d, pal.id) }); setSel(0) }
   }
-  const doImport = async () => {
+  /** `replace` lands the file as a new palette; `add` appends what this one is missing. */
+  const doImport = async (mode: 'replace' | 'add') => {
     finishDraft()
     try {
       const r = await importPaletteFile()
       if (!r) return
-      commit('Import palette', d => { const p = addPalette(d, r.name, r.colors); d.activePaletteId = p.id })
-      setSel(0)
+      if (mode === 'replace') {
+        commit('Import palette', d => { const p = addPalette(d, r.name, r.colors); d.activePaletteId = p.id })
+        setSel(0)
+      } else {
+        const fresh = r.colors.filter(c => !pal.colors.some(x => sameColor(x, c)))
+        if (!fresh.length) { await notice('Nothing to add', `Every colour in ${r.name} is already in "${pal.name}".`); return }
+        commit('Add colours', d => { const p = d.palettes[pal.id]; if (p) for (const c of fresh) addColor(p.colors, c) })
+      }
     } catch (e) {
       await notice('Import failed', e instanceof Error ? e.message : String(e))
     }
   }
-  const doExport = async (format: 'hex' | 'gpl') => {
+  /** `all:gpl`, `used:png`, …: which colours, then which format. */
+  const doExport = async (choice: string) => {
     finishDraft()
-    try { await exportPaletteFile(pal, format) } catch (e) { await notice('Export failed', e instanceof Error ? e.message : String(e)) }
+    const [scope, format] = choice.split(':') as ['all' | 'used', PaletteFormat]
+    const colors = scope === 'used' ? usedColors(doc, pal.colors) : pal.colors
+    if (!colors.length) { await notice('Nothing to export', 'The sprite has no opaque pixels yet.'); return }
+    try { await exportPaletteFile(pal, format, colors) } catch (e) { await notice('Export failed', e instanceof Error ? e.message : String(e)) }
   }
 
   // ── swatches ──
@@ -264,10 +275,37 @@ export default function PaletteEditor({ onClose }: Props) {
             ))}
           </div>
           <div className="paled__row">
-            <button className="text-btn" onClick={doImport}><Icon name="import" size={14} />Import .hex / .gpl / .pal…</button>
+            <Icon name="import" size={14} />
+            <select
+              className="select" value="" aria-label="Import palette"
+              title="Read colours from a palette file (.hex, .gpl, .pal), an image, or a project that holds a palette"
+              onChange={e => { const v = e.target.value; e.target.value = ''; if (v) void doImport(v as 'replace' | 'add') }}
+            >
+              <option value="">Import…</option>
+              <option value="replace">Replace: as a new palette…</option>
+              <option value="add">Add to “{pal.name}”…</option>
+            </select>
             <span className="spacer" />
-            <button className="text-btn" title="Export this palette as a Lospec / Aseprite .hex list" onClick={() => doExport('hex')}><Icon name="export" size={14} />Export .hex</button>
-            <button className="text-btn" title="Export this palette as a GIMP / Aseprite / Krita .gpl file" onClick={() => doExport('gpl')}><Icon name="export" size={14} />Export .gpl</button>
+            <Icon name="export" size={14} />
+            <select
+              className="select" value="" aria-label="Export palette"
+              title="Save this palette, or only the colours the sprite actually uses"
+              onChange={e => { const v = e.target.value; e.target.value = ''; if (v) void doExport(v) }}
+            >
+              <option value="">Export…</option>
+              <optgroup label="Whole palette">
+                <option value="all:hex">.hex (Lospec)</option>
+                <option value="all:gpl">.gpl (GIMP, Aseprite)</option>
+                <option value="all:pal">.pal (JASC)</option>
+                <option value="all:png">.png swatches</option>
+              </optgroup>
+              <optgroup label="Colours the sprite uses">
+                <option value="used:hex">.hex (Lospec)</option>
+                <option value="used:gpl">.gpl (GIMP, Aseprite)</option>
+                <option value="used:pal">.pal (JASC)</option>
+                <option value="used:png">.png swatches</option>
+              </optgroup>
+            </select>
           </div>
         </section>
       </div>

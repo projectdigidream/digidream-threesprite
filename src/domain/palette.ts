@@ -1,4 +1,5 @@
 import { newId } from './ids'
+import { createImage } from './image'
 import type { Palette, PartImage, Project, RGBA } from './types'
 
 export const MAX_PALETTE = 256
@@ -218,15 +219,22 @@ export function hexToRgba(hex: string, alpha = 255): RGBA | null {
 // ── palette files ────────────────────────────────────────────────────────────
 
 /**
- * Read a palette from text. Understands GIMP `.gpl`, JASC `.pal`, and plain
- * hex lists (Lospec `.hex`, one `rrggbb` per line, `#` optional, comments after
- * `;` or `//`). Duplicates are dropped; the result is capped at MAX_PALETTE.
+ * Read a palette from text. Understands GIMP `.gpl`, JASC `.pal`, plain hex
+ * lists (Lospec `.hex`, one `rrggbb` per line, `#` optional, comments after `;`
+ * or `//`), and a JSON project that carries one — a qPainter `.texproj.json`
+ * through its `palette`, or this editor's own `project.json` through its active
+ * palette. Duplicates are dropped; the result is capped at MAX_PALETTE.
  */
 export function parsePaletteText(text: string): RGBA[] {
   const out: RGBA[] = []
   const push = (c: RGBA) => { if (!out.some(x => sameColor(x, c)) && out.length < MAX_PALETTE) out.push(c) }
   const lines = text.split(/\r?\n/)
   const head = (lines[0] ?? '').trim()
+
+  if (text.trimStart().startsWith('{')) {
+    for (const c of paletteFromJson(text)) push(c)
+    return out
+  }
 
   if (/^GIMP Palette/i.test(head)) {
     for (const raw of lines.slice(1)) {
@@ -260,6 +268,27 @@ export function parsePaletteText(text: string): RGBA[] {
 
 const clamp255 = (v: number) => Math.min(255, Math.max(0, Math.round(v)))
 
+const isRgbTriple = (c: unknown): c is number[] => Array.isArray(c) && c.length >= 3 && c.slice(0, 3).every(v => typeof v === 'number')
+
+/** The palette of a JSON project: qPainter's `palette`, or one of ours. */
+function paletteFromJson(text: string): RGBA[] {
+  let doc: Record<string, unknown>
+  try { doc = JSON.parse(text) as Record<string, unknown> } catch { return [] }
+  const triples = (v: unknown): RGBA[] =>
+    (Array.isArray(v) ? v : []).filter(isRgbTriple).map(c => [clamp255(c[0]), clamp255(c[1]), clamp255(c[2]), 255] as RGBA)
+
+  const flat = triples(doc.palette)
+  if (flat.length) return flat
+  // our own project.json: named palettes, the active one first
+  const pals = doc.palettes as Record<string, { colors?: unknown }> | undefined
+  if (pals && typeof pals === 'object') {
+    const active = typeof doc.activePaletteId === 'string' ? pals[doc.activePaletteId] : undefined
+    const pick = active ?? Object.values(pals)[0]
+    if (pick) return triples(pick.colors)
+  }
+  return []
+}
+
 /** Lospec / Aseprite `.hex`: one lowercase `rrggbb` per line, no `#`. */
 export function serializeHexPalette(colors: readonly RGBA[]): string {
   return colors.map(c => rgbaToHex(c).slice(1)).join('\n') + '\n'
@@ -269,6 +298,90 @@ export function serializeHexPalette(colors: readonly RGBA[]): string {
 export function serializeGplPalette(name: string, colors: readonly RGBA[]): string {
   const rows = colors.map(c => `${String(c[0]).padStart(3)} ${String(c[1]).padStart(3)} ${String(c[2]).padStart(3)}\t${rgbaToHex(c)}`)
   return `GIMP Palette\nName: ${name.replace(/[\r\n]+/g, ' ')}\nColumns: 8\n#\n${rows.join('\n')}\n`
+}
+
+/** JASC `.pal` (Paint Shop Pro, Aseprite, GrafX2), CRLF throughout as the format wants. */
+export function serializeJascPalette(colors: readonly RGBA[]): string {
+  const rows = colors.map(c => `${c[0]} ${c[1]} ${c[2]}`)
+  return `JASC-PAL\r\n0100\r\n${colors.length}\r\n${rows.join('\r\n')}\r\n`
+}
+
+/** Lospec's PNG palette: one opaque pixel per colour on a single row. */
+export function paletteStripImage(colors: readonly RGBA[]): PartImage {
+  const w = Math.max(1, colors.length)
+  const img = createImage(w, 1)
+  colors.forEach((c, i) => {
+    img.pixels[i * 4] = c[0]
+    img.pixels[i * 4 + 1] = c[1]
+    img.pixels[i * 4 + 2] = c[2]
+    img.pixels[i * 4 + 3] = 255
+  })
+  return img
+}
+
+/**
+ * The colours of an image, in the order they first appear, cut down to `max`
+ * by median cut when there are more. Pixels below half alpha are ignored, as
+ * a palette only holds opaque colours.
+ */
+export function colorsFromPixels(px: Uint8ClampedArray, max = MAX_PALETTE): RGBA[] {
+  const seen = new Map<number, RGBA>()
+  for (let i = 0; i < px.length; i += 4) {
+    if (px[i + 3] < 128) continue
+    const key = (px[i] << 16) | (px[i + 1] << 8) | px[i + 2]
+    if (!seen.has(key)) seen.set(key, [px[i], px[i + 1], px[i + 2], 255])
+  }
+  const all = [...seen.values()]
+  return all.length <= max ? all : medianCut(all, max)
+}
+
+/** Split the colours along their widest channel until there are `max` boxes, then average each. */
+function medianCut(all: RGBA[], max: number): RGBA[] {
+  const boxes: RGBA[][] = [all]
+  while (boxes.length < max) {
+    let best = -1, bestRange = 0, bestCh = 0
+    boxes.forEach((b, i) => {
+      if (b.length < 2) return
+      for (let k = 0; k < 3; k++) {
+        let lo = 255, hi = 0
+        for (const c of b) { if (c[k] < lo) lo = c[k]; if (c[k] > hi) hi = c[k] }
+        if (hi - lo > bestRange) { bestRange = hi - lo; best = i; bestCh = k }
+      }
+    })
+    if (best < 0) break
+    const b = boxes[best].slice().sort((p, q) => p[bestCh] - q[bestCh])
+    boxes.splice(best, 1, b.slice(0, b.length >> 1), b.slice(b.length >> 1))
+  }
+  return boxes.map(b => [0, 1, 2].map(k => Math.round(b.reduce((s, c) => s + c[k], 0) / b.length)).concat(255) as unknown as RGBA)
+}
+
+/**
+ * The colours the sprite actually uses: the palette's own first, in palette
+ * order, then any off-palette ones in the order they are first met. Every part,
+ * variant and view counts; transparent pixels do not.
+ */
+export function usedColors(p: Project, palette: readonly RGBA[]): RGBA[] {
+  const key = (r: number, g: number, b: number) => (r << 16) | (g << 8) | b
+  const seen = new Map<number, RGBA>()
+  for (const partId of p.partOrder) {
+    const part = p.parts[partId]
+    if (!part) continue
+    for (const vid of part.variantOrder) {
+      const variant = part.variants[vid]
+      if (!variant) continue
+      for (const view of Object.keys(variant.images).map(Number).sort((a, b) => a - b)) {
+        const px = variant.images[view]?.pixels
+        if (!px) continue
+        for (let i = 0; i < px.length; i += 4) {
+          if (px[i + 3] < 128) continue
+          const k = key(px[i], px[i + 1], px[i + 2])
+          if (!seen.has(k)) seen.set(k, [px[i], px[i + 1], px[i + 2], 255])
+        }
+      }
+    }
+  }
+  const inPalette = palette.filter(c => seen.delete(key(c[0], c[1], c[2])))
+  return [...inPalette, ...seen.values()].slice(0, MAX_PALETTE)
 }
 
 // ── palettes in a project ────────────────────────────────────────────────────
