@@ -95,4 +95,27 @@ dependencies {
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.0")
 }
 
+/**
+ * Every release APK is also dropped at the root of the repository as
+ * `PrSpr-editor.apk`, whichever way the build was started, so the newest one is
+ * always the same obvious file and never a path six directories deep.
+ */
+val repoRoot: File = rootProject.projectDir.parentFile.parentFile.parentFile
+
+tasks.whenTaskAdded {
+    if (name.startsWith("assemble") && name.endsWith("Release")) {
+        doLast {
+            val outputs = File(layout.buildDirectory.get().asFile, "outputs/apk")
+            val apk = outputs.walkTopDown().filter { it.isFile && it.extension == "apk" }.maxByOrNull { it.lastModified() }
+            if (apk == null) {
+                logger.lifecycle("no APK to copy to ${repoRoot.path}")
+            } else {
+                val dest = File(repoRoot, "PrSpr-editor.apk")
+                apk.copyTo(dest, overwrite = true)
+                logger.lifecycle("copied ${apk.name} (${apk.length() / 1024 / 1024} MB) to ${dest.path}")
+            }
+        }
+    }
+}
+
 apply(from = "tauri.build.gradle.kts")

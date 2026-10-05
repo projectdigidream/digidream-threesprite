@@ -59,3 +59,6 @@ vscode/*.vsix
 # Engine runtime build output
 runtime/out/
 runtime/out-types/
+
+# the copy of the newest Android build that lands at the root
+/PrSpr-editor.apk
