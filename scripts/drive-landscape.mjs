@@ -39,6 +39,7 @@ async function boxes(page) {
     return {
       main: r('.mobile__main'), rail: r('.mobile__rail'), tabs: r('.tab-bar'), panels,
       studio3d: r('.studio-mobile__3d'), studio2d: r('.studio-mobile__2d'),
+      toolbar: r('.toolbar'),
     }
   })
 }
@@ -98,6 +99,41 @@ for (const [name, viewport] of [['portrait', PORTRAIT], ['landscape', LANDSCAPE]
       }
     }
     if (tabs && tabs.y + tabs.h > viewport.height + 1) fail.push(`${name}/${mode}: the tab bar runs off the bottom`)
+  }
+  await ctx.close()
+}
+
+// Android's navigation bar takes one side of the screen in landscape and the
+// page draws under it. Stand in for the system inset and check that nothing
+// interactive is left beneath it.
+{
+  const ctx = await browser.newContext({ viewport: LANDSCAPE, deviceScaleFactor: 2, isMobile: true, hasTouch: true })
+  const page = await ctx.newPage()
+  page.on('pageerror', e => errors.push(`inset pageerror: ${e.message}`))
+  await page.goto(url, { waitUntil: 'networkidle' })
+  await page.waitForSelector('.pixel-canvas__surface', { timeout: 20000 })
+  await page.evaluate(() => window.__editorStore.getState().setUi({ mode: 'draw' }))
+  await page.waitForTimeout(300)
+  const NAV = 48
+  await page.evaluate(n => document.querySelector('.app').style.setProperty('--inset-right', `${n}px`), NAV)
+  await page.waitForTimeout(250)
+  await page.screenshot({ path: join(outDir, 'landscape-nav-inset.png') })
+  const right = await page.evaluate(() => {
+    const edge = (sel) => {
+      const el = document.querySelector(sel)
+      if (!el) return null
+      const b = el.getBoundingClientRect()
+      return Math.round(b.x + b.width)
+    }
+    // the controls that live closest to that edge
+    const btns = [...document.querySelectorAll('.mobile__rail .icon-btn, .tab-bar button, .toolbar button')]
+      .map(el => { const b = el.getBoundingClientRect(); return Math.round(b.x + b.width) })
+    return { rail: edge('.mobile__rail'), tabs: edge('.tab-bar'), toolbar: edge('.toolbar'), furthestButton: Math.max(...btns) }
+  })
+  const limit = LANDSCAPE.width - NAV
+  console.log(` inset: with a ${NAV}px navigation bar, right edges — rail ${right.rail}, tabs ${right.tabs}, toolbar ${right.toolbar}, furthest control ${right.furthestButton} (must be ≤ ${limit})`)
+  for (const [what, x] of Object.entries(right)) {
+    if (x > limit) fail.push(`a ${NAV}px navigation bar would cover the ${what}: it reaches ${x}, past ${limit}`)
   }
   await ctx.close()
 }
