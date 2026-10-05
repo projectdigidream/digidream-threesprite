@@ -413,6 +413,16 @@ input[type='text'], input:not([type]), input[inputmode] {
 .view-grid__cell .pixel-canvas { height: 180px; flex: none; }
 .pixel-canvas__banner--small { font-size: 11px; padding: 4px 6px; gap: 4px; bottom: 4px; }
 .pixel-canvas__banner--small button { min-height: 24px; padding: 0 6px; font-size: 11px; }
+/* said once, in passing, and never in the way: it fades itself out */
+.pixel-canvas__banner--hint { pointer-events: none; animation: hint-in 120ms ease-out; }
+@keyframes hint-in { from { opacity: 0; transform: translate(-50%, 6px); } to { opacity: 1; transform: translate(-50%, 0); } }
+
+/* A short screen is a phone held sideways, where a full-size banner would take
+   a quarter of the canvas. Every banner shrinks to the compact shape there. */
+@media (max-height: 520px) {
+  .pixel-canvas__banner { font-size: 11px; padding: 4px 8px; gap: 6px; bottom: 6px; max-width: calc(100% - 12px); }
+  .pixel-canvas__banner button { min-height: 26px; padding: 0 8px; font-size: 11px; }
+}
 
 .studio-mobile { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .studio-mobile__3d { flex: 1; min-height: 0; display: flex; flex-direction: column; border-bottom: 1px solid var(--border); }

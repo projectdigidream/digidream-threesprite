@@ -113,6 +113,15 @@ export default function PixelCanvas({ view: viewProp, embedded = false }: Props)
   const fittedDocRef = useRef<string | null>(null)
   const localZpRef = useRef<{ zoom: number; pan: Vec2 }>({ zoom: 8, pan: { x: 0, y: 0 } })
   const [, force] = useState(0)
+  /** A line that shows itself for a moment when a tap could not do anything. */
+  const [hint, setHint] = useState<string | null>(null)
+  const hintTimer = useRef(0)
+  const flashHint = useCallback((msg: string) => {
+    setHint(msg)
+    window.clearTimeout(hintTimer.current)
+    hintTimer.current = window.setTimeout(() => setHint(null), 2600)
+  }, [])
+  useEffect(() => () => window.clearTimeout(hintTimer.current), [])
 
   const storeMode = useEditor(s => s.ui.mode)
   const tool = useEditor(s => s.ui.tool)
@@ -477,7 +486,10 @@ export default function PixelCanvas({ view: viewProp, embedded = false }: Props)
         if (!prim) return
         s.beginPreview()
         gestureRef.current = { kind: 'solid', pointerId: e.pointerId, partId: t.partId, primId: prim.id, boneId: part.boneId, start: c, startPos: { ...prim.position } }
+        return
       }
+      // nothing else can touch a solids part, so say why rather than ignoring the tap
+      flashHint(ui.tool === 'move' ? 'Pick a shape in the Solids panel, then drag it' : 'Built from 3D shapes — switch to the Move tool to drag one')
       return
     }
     if (!t || !t.m) return
@@ -755,11 +767,6 @@ export default function PixelCanvas({ view: viewProp, embedded = false }: Props)
       {mode === 'draw' && !target && !embedded && !playing && (
         <div className="pixel-canvas__banner">No part selected. Add a part to start drawing.</div>
       )}
-      {mode === 'draw' && target?.solids && !embedded && (
-        <div className="pixel-canvas__banner">
-          “{state.doc.parts[target.partId]?.name}” is built from 3D solids and renders into every view. Drag a shape with the Move tool, or edit shapes in the Solids panel.
-        </div>
-      )}
       {mode === 'draw' && target?.derived && derivedOf != null && !embedded && (
         <div className="pixel-canvas__banner">
           View {target.view} ({viewLabel(state.doc.views.count, target.view)}) is mirrored from view {derivedOf}.
@@ -773,6 +780,7 @@ export default function PixelCanvas({ view: viewProp, embedded = false }: Props)
           {copyFrom != null && <button onClick={() => createImageForView(copyFrom)}>Copy view {copyFrom}</button>}
         </div>
       )}
+      {hint && <div className="pixel-canvas__banner pixel-canvas__banner--small pixel-canvas__banner--hint">{hint}</div>}
       {mode === 'rig' && rigTool === 'addBone' && !embedded && (
         <div className="pixel-canvas__banner">Press at the new bone's root and drag to its tip (child of the selected bone). Esc cancels.</div>
       )}
