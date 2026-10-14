@@ -9,9 +9,10 @@
 import { chromium } from 'playwright-core'
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
+import { homedir } from 'node:os'
 
 const out = process.argv[2]
-const PROJECT = process.argv[3] ?? '~/Library/Application Support/com.digidream.threesprite/projects/A0LhsEcd3YLg.tsprite'
+const PROJECT = process.argv[3] ?? (process.env.TSPRITE_PROJECT ?? join(homedir(), 'Library/Application Support/com.digidream.threesprite/projects/A0LhsEcd3YLg.tsprite'))
 if (!out) { console.error('usage: manual-capture.mjs <outDir> [projectFile]'); process.exit(2) }
 mkdirSync(out, { recursive: true })
 const url = process.env.APP_URL ?? 'http://localhost:1420'

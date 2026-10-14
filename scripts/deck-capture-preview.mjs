@@ -6,9 +6,10 @@
  */
 import { chromium } from 'playwright-core'
 import { join } from 'node:path'
+import { homedir } from 'node:os'
 
 const OUT = process.argv[2]
-const PROJECT_FILE = '~/Library/Application Support/com.digidream.threesprite/projects/A0LhsEcd3YLg.tsprite'
+const PROJECT_FILE = (process.env.TSPRITE_PROJECT ?? join(homedir(), 'Library/Application Support/com.digidream.threesprite/projects/A0LhsEcd3YLg.tsprite'))
 const url = 'http://localhost:1420'
 
 const browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] })

@@ -15,11 +15,12 @@ import { chromium } from 'playwright-core'
 import { createServer } from 'node:http'
 import { createReadStream, existsSync, mkdirSync, readFileSync, statSync } from 'node:fs'
 import { extname, join, normalize, resolve } from 'node:path'
+import { homedir } from 'node:os'
 import { pathToFileURL } from 'node:url'
 
 const args = process.argv.slice(2).filter(a => !a.startsWith('--'))
 const outDir = args[0] ?? 'drive-out'
-const PROJECT = args[1] ?? '~/Library/Application Support/com.digidream.threesprite/projects/A0LhsEcd3YLg.tsprite'
+const PROJECT = args[1] ?? (process.env.TSPRITE_PROJECT ?? join(homedir(), 'Library/Application Support/com.digidream.threesprite/projects/A0LhsEcd3YLg.tsprite'))
 mkdirSync(outDir, { recursive: true })
 
 const repo = resolve(new URL('..', import.meta.url).pathname)
