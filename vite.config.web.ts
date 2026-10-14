@@ -30,7 +30,7 @@ export default defineConfig({
 function entryAsIndexHtml(): Plugin {
   let outDir = 'dist-web'
   return {
-    name: 'prspr-editor:entry-as-index-html',
+    name: 'threesprite:entry-as-index-html',
     apply: 'build',
     configResolved(config) { outDir = config.build.outDir },
     async closeBundle() { await rename(join(outDir, 'index.web.html'), join(outDir, 'index.html')) },

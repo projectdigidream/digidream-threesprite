@@ -99,6 +99,8 @@ const tauriLibrary: ProjectLibrary = {
 
 // ── Browser: IndexedDB ───────────────────────────────────────────────────────
 
+// The database keeps the app's old name (PrSpr editor): renaming it would hide
+// every project a browser has already saved.
 const DB = 'prspr-editor'
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {

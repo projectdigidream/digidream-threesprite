@@ -5,12 +5,12 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(TSpriteEditorProvider.register(context))
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('prspr-editor.newProject', async () => {
+    vscode.commands.registerCommand('threesprite.newProject', async () => {
       const folder = vscode.workspace.workspaceFolders?.[0]
       const target = await vscode.window.showSaveDialog({
         title: 'New sprite project',
         defaultUri: folder ? vscode.Uri.joinPath(folder.uri, 'sprite.tsprite') : undefined,
-        filters: { 'PrSpr editor project': ['tsprite'] },
+        filters: { 'ThreeSprite project': ['tsprite'] },
       })
       if (!target) return
       // An empty file. The editor sees no bytes, asks for the canvas size and

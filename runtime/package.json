@@ -1,7 +1,7 @@
 {
-  "name": "@prspr/runtime",
-  "version": "0.1.0",
-  "description": "Play PrSpr editor multi-view sprites in any engine: pick the rotation from the camera direction and the frame from the clock.",
+  "name": "@threesprite/runtime",
+  "version": "0.2.0",
+  "description": "Play ThreeSprite multi-view sprites in any engine: pick the rotation from the camera direction and the frame from the clock.",
   "license": "MIT",
   "type": "module",
   "sideEffects": false,
@@ -29,7 +29,7 @@
     "atlas",
     "animation",
     "gamedev",
-    "prspr-editor"
+    "threesprite"
   ],
   "scripts": {
     "build": "tsc -p . && node scripts/build-tsprite.mjs",

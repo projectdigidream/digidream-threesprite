@@ -1,4 +1,4 @@
-# PrSpr editor
+# ThreeSprite
 
 An editor for animated sprites of characters that live in 3D space and need several rotation views per frame — the classic billboard sprite. Desktop (macOS, Windows, Linux), Android, and a browser build from one codebase.
 
@@ -90,7 +90,7 @@ npm run package
 ```
 
 That builds the web bundle into `media/`, compiles the extension and writes
-`prspr-editor.vsix`. Install it with `code --install-extension prspr-editor.vsix`,
+`threesprite.vsix`. Install it with `code --install-extension threesprite.vsix`,
 or from **Extensions → … → Install from VSIX…**.
 
 ### Hosting the web version
@@ -99,7 +99,7 @@ or from **Extensions → … → Install from VSIX…**.
 
 - **Drag and drop**: [Netlify Drop](https://app.netlify.com/drop) or Cloudflare Pages "direct upload" — drop the `dist-web` folder in the browser and you get a URL.
 - **One command**: `npx surge dist-web` (asks for an email and gives a `*.surge.sh` address), `npx vercel dist-web`, or `npx wrangler pages deploy dist-web`.
-- **GitHub Pages**: push the repo and publish `dist-web` to the `gh-pages` branch (`npx gh-pages -d dist-web`), or let an Actions workflow run `pnpm install && pnpm build:web` and upload `dist-web`. The relative URLs mean the `https://user.github.io/PrSpr editor/` sub-path just works.
+- **GitHub Pages**: push the repo and publish `dist-web` to the `gh-pages` branch (`npx gh-pages -d dist-web`), or let an Actions workflow run `pnpm install && pnpm build:web` and upload `dist-web`. The relative URLs mean the `https://user.github.io/ThreeSprite/` sub-path just works.
 
 Preview locally with `pnpm exec vite preview --config vite.config.web.ts`, or check a sub-path deployment with `node scripts/drive-webhost.mjs <url>`.
 
@@ -132,7 +132,7 @@ unoptimised rasterizer is noticeably slower to draw.
 - **Unit tests**: `pnpm test:run` (rasterizer golden pixels, view-selection property tests, project model, undo, exporters' naming, project file round trip) and `cargo test` (bundle parsing, Doom names, atlas packing, PNG/GIF codecs, sinks).
 - **Browser-driven smoke**: with `pnpm dev` running, `node scripts/drive.mjs out`, `node scripts/drive-studio.mjs out [--mobile] [--landscape]`, `node scripts/drive-export.mjs out`, `node scripts/drive-dither.mjs out`, `node scripts/drive-landscape.mjs out`, `node scripts/drive-solids-hint.mjs out` drive the installed Google Chrome headlessly through `playwright-core` and write screenshots.
 - **VS Code webview**: after `npm run build` in `vscode/`, `node scripts/drive-vscode.mjs out` serves the extension's own generated HTML — same content-security policy, same `<base>`, a stubbed `acquireVsCodeApi` — and plays the host conversation against the built bundle: open a file, edit it, ask for bytes, save, undo, redo and revert. It needs no dev server and no VS Code.
-- **Platform self-test**: `THREESPRITE_SELFTEST=1 src-tauri/target/debug/prspr-editor` runs binary IPC, app-data and export checks inside the real desktop app and prints a `SELFTEST {...}` JSON line (the release binary works the same). On Android, `scripts/android-selftest.sh` boots the emulator headlessly, installs the debug APK, triggers the same self-test through an `AppData/selftest` marker and prints `selftest.json`; `scripts/android-saf-export.sh` then drives Export → Save zip through the system file picker and pulls the zip back from Downloads.
+- **Platform self-test**: `THREESPRITE_SELFTEST=1 src-tauri/target/debug/threesprite` runs binary IPC, app-data and export checks inside the real desktop app and prints a `SELFTEST {...}` JSON line (the release binary works the same). On Android, `scripts/android-selftest.sh` boots the emulator headlessly, installs the debug APK, triggers the same self-test through an `AppData/selftest` marker and prints `selftest.json`; `scripts/android-saf-export.sh` then drives Export → Save zip through the system file picker and pulls the zip back from Downloads.
 - **Handedness check**: make an 8-view project with mirror off and draw, in each view `k`, an arrow pointing `(−sin 2π(k−1)/8, +cos 2π(k−1)/8)` on screen (view 1 towards the viewer, 3 left, 5 up, 7 right) plus the digit `k`. In the 3D studio the drawn arrow must follow the facing arrow as the camera orbits, and "Spread 8" must show 1…8 in order.
 
 ## Layout

@@ -61,7 +61,7 @@ runtime/out/
 runtime/out-types/
 
 # the copy of the newest Android build that lands at the root
-/PrSpr-editor.apk
+/ThreeSprite.apk
 
 # --- Shared by every repository of the workspace. These lines came from the
 # workspace's .gitignore, which covered this folder until it became a

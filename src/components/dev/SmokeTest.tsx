@@ -40,9 +40,9 @@ export default function SmokeTest() {
     try {
       const { save } = await import('@tauri-apps/plugin-dialog')
       const { writeFile } = await import('@tauri-apps/plugin-fs')
-      const path = await save({ defaultPath: 'prspr-editor-smoke.txt', filters: [{ name: 'Text', extensions: ['txt'] }] })
+      const path = await save({ defaultPath: 'threesprite-smoke.txt', filters: [{ name: 'Text', extensions: ['txt'] }] })
       if (!path) { add('save: cancelled'); return }
-      const bytes = new TextEncoder().encode(`PrSpr editor smoke test ${new Date().toISOString()}\n`)
+      const bytes = new TextEncoder().encode(`ThreeSprite smoke test ${new Date().toISOString()}\n`)
       await writeFile(path, bytes)
       add(`save → wrote ${bytes.length} bytes to ${path}`)
     } catch (e) { fail(e) }
@@ -75,7 +75,7 @@ export default function SmokeTest() {
   const tauri = isTauri()
   return (
     <div style={{ padding: 16, fontFamily: 'system-ui, sans-serif', color: '#e8ecf2' }}>
-      <h2 style={{ marginTop: 0 }}>PrSpr editor smoke test</h2>
+      <h2 style={{ marginTop: 0 }}>ThreeSprite smoke test</h2>
       <p style={{ opacity: 0.8 }}>
         tauri: {String(tauri)} · android: {String(isAndroid())} · dpr: {window.devicePixelRatio} · {navigator.userAgent}
       </p>

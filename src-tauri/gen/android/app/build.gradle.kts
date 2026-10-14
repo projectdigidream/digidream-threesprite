@@ -97,7 +97,7 @@ dependencies {
 
 /**
  * Every release APK is also dropped at the root of the repository as
- * `PrSpr-editor.apk`, whichever way the build was started, so the newest one is
+ * `ThreeSprite.apk`, whichever way the build was started, so the newest one is
  * always the same obvious file and never a path six directories deep.
  */
 val repoRoot: File = rootProject.projectDir.parentFile.parentFile.parentFile
@@ -110,7 +110,7 @@ tasks.whenTaskAdded {
             if (apk == null) {
                 logger.lifecycle("no APK to copy to ${repoRoot.path}")
             } else {
-                val dest = File(repoRoot, "PrSpr-editor.apk")
+                val dest = File(repoRoot, "ThreeSprite.apk")
                 apk.copyTo(dest, overwrite = true)
                 logger.lifecycle("copied ${apk.name} (${apk.length() / 1024 / 1024} MB) to ${dest.path}")
             }

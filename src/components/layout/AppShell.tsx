@@ -43,7 +43,7 @@ export default function AppShell() {
   useFileShortcuts(openNew, notify)
   useAndroidBack(useCallback(() => { if (dialogRef.current) { setDialog(null); return true } return false }, []))
 
-  useEffect(() => { document.title = `${dirty ? '• ' : ''}${name} — PrSpr editor` }, [name, dirty])
+  useEffect(() => { document.title = `${dirty ? '• ' : ''}${name} — ThreeSprite` }, [name, dirty])
   useEffect(() => startPlaybackLoop(), [])
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

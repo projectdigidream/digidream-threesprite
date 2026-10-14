@@ -201,7 +201,7 @@ expect(await page.locator('.export__format').count() > 0, 'the export panel rend
   expect(names.length === 2 && names.some(n => n.endsWith('.png')) && names.some(n => n.endsWith('.json')),
     `the atlas export writes a sheet and a manifest (${names.join(', ')})`)
   const manifest = JSON.parse(new TextDecoder().decode(atlas[names.find(n => n.endsWith('.json'))]))
-  expect(manifest.format === 'threesprite-atlas', 'the manifest is a PrSpr editor atlas')
+  expect(manifest.format === 'threesprite-atlas', 'the manifest is a ThreeSprite atlas')
 
   // the engine library reads what the webview just wrote
   const sheet = TSpriteSheet.parse(manifest)

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Builds the Android release APK and leaves a copy at the root of the
-# repository as PrSpr-editor.apk. The Android toolchain variables are not in
+# repository as ThreeSprite.apk. The Android toolchain variables are not in
 # any shell profile on this machine, so they are worked out here rather than
 # being something to remember.
 #
@@ -38,7 +38,7 @@ echo "Java $JAVA_HOME"
 pnpm tauri android build --apk "$@"
 
 # Gradle drops the copy itself, so this only has to report what landed.
-out="$repo/PrSpr-editor.apk"
+out="$repo/ThreeSprite.apk"
 if [ -f "$out" ]; then
   echo
   echo "APK at $out ($(( $(wc -c < "$out") / 1024 / 1024 )) MB, $(date -r "$out" '+%Y-%m-%d %H:%M'))"

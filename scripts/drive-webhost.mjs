@@ -5,7 +5,7 @@
  *
  *   pnpm build:web
  *   (cd some/dir && python3 -m http.server 8123)   # with dist-web copied under a sub-path
- *   node scripts/drive-webhost.mjs http://127.0.0.1:8123/deep/sub/prspr-editor/ [outDir]
+ *   node scripts/drive-webhost.mjs http://127.0.0.1:8123/deep/sub/threesprite/ [outDir]
  */
 import { chromium } from 'playwright-core'
 import { mkdirSync } from 'node:fs'

@@ -111,7 +111,7 @@ test('angles arrive in whatever unit the engine uses', () => {
   assert.equal(sheet.viewFor({ relative: turnsFromDegrees(-90) }), 4)
 })
 
-test('rejects things that are not a PrSpr editor atlas', () => {
+test('rejects things that are not a ThreeSprite atlas', () => {
   assert.throws(() => TSpriteSheet.parse({ format: 'other' }), ManifestError)
   assert.throws(() => TSpriteSheet.parse('null'), ManifestError)
   assert.throws(() => TSpriteSheet.parse({ ...manifest, version: 2 }), /newer than this library/)

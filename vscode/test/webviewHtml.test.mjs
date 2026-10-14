@@ -7,7 +7,7 @@ const INDEX = `<!doctype html>
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <title>PrSpr editor</title>
+    <title>ThreeSprite</title>
     <script type="module" crossorigin src="./assets/index.web-abc.js"></script>
     <link rel="stylesheet" crossorigin href="./assets/index-def.css">
   </head>

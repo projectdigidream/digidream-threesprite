@@ -234,7 +234,7 @@ mod tests {
         }
         let manifest: crate::bundle::Manifest = serde_json::from_value(serde_json::json!({
             "format": "atlas",
-            "sink": { "kind": "dir", "path": "/tmp/prspr-editor-fixture" },
+            "sink": { "kind": "dir", "path": "/tmp/threesprite-fixture" },
             "sprite": "HERO",
             "canvas": n,
             "views": { "count": views, "mirror": true },

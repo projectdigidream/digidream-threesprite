@@ -12,7 +12,7 @@
  * happens when the sprite loads. Prefer the plain export for a shipping game
  * and this for tools, jams and editors that would rather not have a build step.
  *
- *   import { loadTsprite } from '@prspr/runtime/tsprite'
+ *   import { loadTsprite } from '@threesprite/runtime/tsprite'
  *
  *   const { sheet, rgba, width, height } = loadTsprite(await readFile('hero.tsprite'))
  *   const texture = uploadRGBA(rgba, width, height)
