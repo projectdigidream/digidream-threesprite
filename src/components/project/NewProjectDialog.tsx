@@ -18,6 +18,10 @@ export default function NewProjectDialog({ onClose, defaultName }: Props) {
   const dirty = useEditor(s => s.dirty)
   const [name, setName] = useState(defaultName ?? 'New sprite')
   const [spriteName, setSpriteName] = useState(defaultName ? normalizeSpriteName(defaultName) : 'SPRT')
+  // The id follows the name until it is typed by hand: sprites left at SPRT
+  // all export under one stem, and replace each other wherever they land.
+  const [idTyped, setIdTyped] = useState(false)
+  const rename = (v: string) => { setName(v); if (!idTyped) setSpriteName(normalizeSpriteName(v)) }
   const [size, setSize] = useState(64)
   const [customSize, setCustomSize] = useState('')
   const [views, setViews] = useState(8)
@@ -39,11 +43,11 @@ export default function NewProjectDialog({ onClose, defaultName }: Props) {
         <h2>New sprite</h2>
         <label className="field">
           <span>Name</span>
-          <input value={name} onChange={e => setName(e.target.value)} autoFocus />
+          <input value={name} onChange={e => rename(e.target.value)} autoFocus />
         </label>
         <label className="field">
           <span>Sprite id (the stem of every exported file)</span>
-          <input value={spriteName} maxLength={MAX_SPRITE_NAME} onChange={e => setSpriteName(e.target.value)} onBlur={() => setSpriteName(normalizeSpriteName(spriteName))} />
+          <input value={spriteName} maxLength={MAX_SPRITE_NAME} onChange={e => { setIdTyped(true); setSpriteName(e.target.value) }} onBlur={() => setSpriteName(normalizeSpriteName(spriteName))} />
           <small>Letters, digits, <code>_</code> and <code>-</code>. Doom-style export is the one format that wants exactly 4, in capitals.</small>
         </label>
         <div className="field">
