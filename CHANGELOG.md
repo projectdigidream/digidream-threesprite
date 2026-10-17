@@ -33,6 +33,10 @@ anything not released yet is under **Unreleased**.
 - **The bones can be hidden in Animate**, with the bone button in the same
   corner, and hide by themselves while the animation plays. Hidden bones
   cannot be dragged; Rig always shows them.
+- **The move fields say where a move goes on screen** in the current view:
+  right, up and forward are the character's own, so "Move right" of a
+  character facing you now reads "Move right ←". An arrow, or ⊙ / ⊗ for
+  towards and away from you; for a child bone, in its parent's frame as posed.
 - **Switch a part's variant from the timeline.** With a part's row picked,
   the timeline's bar shows its variant at the current frame; choosing another
   keys the switch there, and the diamond beside it adds or removes that key.

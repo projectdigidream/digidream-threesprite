@@ -2,6 +2,7 @@ import { getKey, removeKey, setKey } from '../../domain/animation'
 import { restProjectedAngle, sampleBone, samplePart } from '../../domain/pose'
 import { attachPart, boneOrder, ensureBoneTrack, ensurePartTrack, reparentBone, setPartSkin } from '../../domain/project'
 import type { Animation, Bone, Id, Interp, Part, Vec3 } from '../../domain/types'
+import { AXIS_NAMES, axisHints, type Axis, type AxisHints } from '../../core/ui/axisHints'
 import { useEditor } from '../../store/editorStore'
 import { Hint } from '../ui/Hint'
 import { Icon } from '../ui/Icon'
@@ -19,14 +20,19 @@ export default function Inspector() {
 }
 
 /** Three numeric fields for a character-frame vector. */
-function Vec3Fields({ label, value, step = 1, suffix, onCommit, badge }: { label: string; value: Vec3; step?: number; suffix?: string; onCommit: (v: Vec3) => void; badge?: React.ReactNode }) {
-  return (
-    <>
-      <NumField label={`${label} right`} value={value.r} step={step} suffix={suffix} extra={badge} onCommit={v => onCommit({ ...value, r: v })} />
-      <NumField label={`${label} up`} value={value.u} step={step} suffix={suffix} onCommit={v => onCommit({ ...value, u: v })} />
-      <NumField label={`${label} forward`} value={value.f} step={step} suffix={suffix} onCommit={v => onCommit({ ...value, f: v })} />
-    </>
-  )
+function Vec3Fields({ label, value, step = 1, suffix, onCommit, badge, hints }: { label: string; value: Vec3; step?: number; suffix?: string; onCommit: (v: Vec3) => void; badge?: React.ReactNode; hints?: AxisHints }) {
+  const field = (axis: Axis, extra?: React.ReactNode) => {
+    const h = hints?.[axis]
+    const name = AXIS_NAMES[axis]
+    return (
+      <NumField
+        label={`${label} ${name}`} value={value[axis]} step={step} suffix={suffix} onCommit={v => onCommit({ ...value, [axis]: v })}
+        title={h ? `Its own ${name}: in this view, ${h.words}` : undefined}
+        extra={<>{h && <span className="numfield__dir" aria-hidden>{h.arrow}</span>}{extra}</>}
+      />
+    )
+  }
+  return <>{field('r', badge)}{field('u')}{field('f')}</>
 }
 
 function RotFields({ label, value, onCommit, badge }: { label: string; value: Vec3; onCommit: (v: Vec3) => void; badge?: React.ReactNode }) {
@@ -73,7 +79,7 @@ function RigInspector() {
             </select>
           </label>
           <div className="numgrid numgrid--3">
-            <Vec3Fields label="Pos" value={bone.rest.position} onCommit={v => setBone('Bone position', b => { b.rest.position = v })} />
+            <Vec3Fields label="Pos" value={bone.rest.position} hints={axisHints(doc, null, 0, bone, view)} onCommit={v => setBone('Bone position', b => { b.rest.position = v })} />
             <RotFields label="Rot" value={bone.rest.rotation} onCommit={v => setBone('Bone rotation', b => { b.rest.rotation = v })} />
             <NumField label="Length" value={bone.length} min={1} onCommit={v => setBone('Bone length', b => { b.length = v })} />
           </div>
@@ -147,6 +153,7 @@ function AnimInspector() {
   const doc = useEditor(s => s.doc)
   const animId = useEditor(s => s.ui.animId)
   const frame = useEditor(s => s.ui.frame)
+  const view = useEditor(s => s.ui.view)
   const boneId = useEditor(s => s.ui.selectedBoneId)
   const partId = useEditor(s => s.ui.selectedPartId)
   const commit = useEditor(s => s.commit)
@@ -175,7 +182,7 @@ function AnimInspector() {
           <div className="numgrid numgrid--3">
             <RotFields label="Rot" value={bs.rotation} badge={keyBadge(hasKey(bt?.rotation), () => withAnim('Toggle key', a => { const t = ensureBoneTrack(a, bone.id); if (!removeKey(t.rotation, frame)) setKey(t.rotation, frame, { ...bs.rotation }) }), 'Rotation key at this frame')}
               onCommit={v => withAnim('Key rotation', a => setKey(ensureBoneTrack(a, bone.id).rotation, frame, v))} />
-            <Vec3Fields label="Move" value={bs.translate} badge={keyBadge(hasKey(bt?.translate), () => withAnim('Toggle key', a => { const t = ensureBoneTrack(a, bone.id); if (!removeKey(t.translate, frame)) setKey(t.translate, frame, { ...bs.translate }) }), 'Move key at this frame')}
+            <Vec3Fields label="Move" value={bs.translate} hints={axisHints(doc, anim, frame, bone, view)} badge={keyBadge(hasKey(bt?.translate), () => withAnim('Toggle key', a => { const t = ensureBoneTrack(a, bone.id); if (!removeKey(t.translate, frame)) setKey(t.translate, frame, { ...bs.translate }) }), 'Move key at this frame')}
               onCommit={v => withAnim('Key move', a => setKey(ensureBoneTrack(a, bone.id).translate, frame, v))} />
             <Vec3Fields label="Scale" value={bs.scale} step={0.1} badge={keyBadge(hasKey(bt?.scale), () => withAnim('Toggle key', a => { const t = ensureBoneTrack(a, bone.id); if (!removeKey(t.scale, frame)) setKey(t.scale, frame, { ...bs.scale }) }), 'Scale key at this frame')}
               onCommit={v => withAnim('Key scale', a => setKey(ensureBoneTrack(a, bone.id).scale, frame, v))} />

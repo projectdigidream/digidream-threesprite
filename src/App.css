@@ -389,6 +389,8 @@ input[type='text'], input:not([type]), input[inputmode] {
 .numfield__label { font-size: 11px; color: var(--fg-dim); display: flex; align-items: center; gap: 4px; }
 .numfield__ctl { display: flex; align-items: center; }
 .numfield__ctl input { width: 100%; min-width: 0; min-height: 30px; padding: 0 6px; border-radius: 0; text-align: center; }
+/* where a move along this axis goes on screen in the current view */
+.numfield__dir { margin-left: 4px; color: var(--accent-2); font-weight: 700; }
 .numfield__btn { min-height: 30px; width: 28px; min-width: 28px; padding: 0; border-radius: var(--radius) 0 0 var(--radius); }
 .numfield__btn + input + .numfield__btn { border-radius: 0 var(--radius) var(--radius) 0; }
 .numfield__suffix { font-size: 11px; color: var(--fg-dim); margin-left: 4px; }
