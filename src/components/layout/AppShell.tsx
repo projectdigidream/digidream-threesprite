@@ -4,7 +4,7 @@ import { openRecent } from '../../core/io/projectActions'
 import { startVscodeBridge } from '../../core/io/vscodeHost'
 import { isVscode } from '../../core/platform'
 import { useAndroidBack } from '../../hooks/useAndroidBack'
-import { useAutosave } from '../../hooks/useAutosave'
+import { useAutosave, useNeedsSave } from '../../hooks/useAutosave'
 import { useIsMobile } from '../../hooks/useIsMobile'
 import { isTypingTarget, useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts'
 import { editorStore, useEditor } from '../../store/editorStore'
@@ -30,20 +30,20 @@ export default function AppShell() {
   /** Name offered by the new-project dialog when a host opened an empty file. */
   const [newName, setNewName] = useState<string | undefined>()
   const name = useEditor(s => s.doc.name)
-  const dirty = useEditor(s => s.dirty)
+  const unsaved = useNeedsSave()
   useKeyboardShortcuts()
-  useAutosave()
 
   const notify = useCallback((msg: string, kind: 'info' | 'error' = 'info') => {
     const id = Date.now()
     setToast({ msg, kind, id })
     window.setTimeout(() => setToast(t => (t?.id === id ? null : t)), kind === 'error' ? 6000 : 2500)
   }, [])
+  useAutosave(notify)
   const openNew = useCallback(() => setDialog('new'), [])
   useFileShortcuts(openNew, notify)
   useAndroidBack(useCallback(() => { if (dialogRef.current) { setDialog(null); return true } return false }, []))
 
-  useEffect(() => { document.title = `${dirty ? '• ' : ''}${name} — ThreeSprite` }, [name, dirty])
+  useEffect(() => { document.title = `${unsaved ? '• ' : ''}${name} — ThreeSprite` }, [name, unsaved])
   useEffect(() => startPlaybackLoop(), [])
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

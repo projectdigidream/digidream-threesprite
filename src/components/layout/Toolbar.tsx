@@ -1,3 +1,4 @@
+import { useNeedsSave } from '../../hooks/useAutosave'
 import { canRedo, canUndo, useEditor } from '../../store/editorStore'
 import { Icon } from '../ui/Icon'
 import TabBar from './TabBar'
@@ -11,7 +12,7 @@ interface Props {
 
 export default function Toolbar({ compact = false, onMenu, onSettings, onHelp }: Props) {
   const name = useEditor(s => s.doc.name)
-  const dirty = useEditor(s => s.dirty)
+  const unsaved = useNeedsSave()
   const undoable = useEditor(canUndo)
   const redoable = useEditor(canRedo)
   const undo = useEditor(s => s.undo)
@@ -24,7 +25,7 @@ export default function Toolbar({ compact = false, onMenu, onSettings, onHelp }:
     <header className="toolbar">
       <button className="icon-btn" title="Project menu (new, open, save)" aria-label="Project menu" onClick={onMenu}><Icon name="menu" /></button>
       <button className="toolbar__title" title="Project settings" onClick={onSettings}>
-        <span className="toolbar__name">{name}{dirty ? ' •' : ''}</span>
+        <span className="toolbar__name">{name}{unsaved ? ' •' : ''}</span>
         {!compact && <span className="toolbar__meta">{size}px · {N} views{mirror ? ' · mirrored' : ''}</span>}
       </button>
       <button className="icon-btn" title="Undo (Ctrl+Z)" disabled={!undoable} onClick={undo}><Icon name="undo" /></button>

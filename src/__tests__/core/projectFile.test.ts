@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { unzipSync, zipSync } from 'fflate'
 import { decodeProject, encodeProject, imageFromPng, pngFromImage } from '../../core/io/projectFile'
-import { createImage, setPixel } from '../../domain/image'
+import { cloneImage, createImage, getPixel, setPixel } from '../../domain/image'
 import { DEFAULT_PALETTE } from '../../domain/palette'
 import { addAnimation, addPalette, addPart, addVariant, createProject, setActivePalette, setPartImage, validate } from '../../domain/project'
 import { setKey } from '../../domain/animation'
@@ -89,5 +89,28 @@ describe('project file', () => {
     setPixel(img, 0, 0, [1, 2, 3, 4])
     const back = imageFromPng(pngFromImage(img))
     expect(Array.from(back.pixels)).toEqual([1, 2, 3, 4, 0, 0, 0, 0])
+  })
+
+  it('writes an image swapped in by an edit anew, and the others as they were', () => {
+    const p = createProject({ canvasSize: 8, viewCount: 4, mirror: false })
+    const partId = p.partOrder[0]
+    const vid = p.parts[partId].defaultVariant
+    for (const view of [1, 2]) {
+      const img = createImage(8, 8)
+      setPixel(img, view, view, [view * 50, 0, 0, 255])
+      setPartImage(p, partId, vid, view, img)
+    }
+    // Encoded once, then once more after an edit the way the editor makes one: a copy swapped in.
+    encodeProject(p)
+    const edited = cloneImage(p.parts[partId].variants[vid].images[2])
+    setPixel(edited, 7, 7, [0, 255, 0, 255])
+    setPartImage(p, partId, vid, 2, edited)
+    const back = decodeProject(encodeProject(p)).project.parts[partId].variants[vid].images
+    expect(getPixel(back[1], 1, 1)).toEqual([50, 0, 0, 255])
+    expect(getPixel(back[2], 2, 2)).toEqual([100, 0, 0, 255])
+    expect(getPixel(back[2], 7, 7)).toEqual([0, 255, 0, 255])
+    // A project read from a file writes its images back with the same pixels.
+    const again = decodeProject(encodeProject(decodeProject(encodeProject(p)).project)).project.parts[partId].variants[vid].images
+    expect(Array.from(again[2].pixels)).toEqual(Array.from(edited.pixels))
   })
 })

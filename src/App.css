@@ -474,6 +474,8 @@ input[type='text'], input:not([type]), input[inputmode] {
 .menu__item { justify-content: flex-start; background: transparent; border-color: transparent; gap: 10px; }
 .menu__item kbd { margin-left: auto; font: 11px system-ui, sans-serif; color: var(--fg-dim); }
 .menu__meta { font-size: 11px; color: var(--fg-dim); padding: 4px 12px 8px; word-break: break-all; }
+.menu__meta--error { color: var(--danger); word-break: normal; }
+.menu__toggle { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--fg-dim); padding: 2px 12px 8px; cursor: pointer; }
 .menu__header { font-size: 11px; color: var(--fg-dim); text-transform: uppercase; letter-spacing: 0.04em; padding: 6px 12px 2px; border-top: 1px solid var(--border); }
 .menu__recent { display: flex; flex-direction: column; }
 .menu__recent-row { display: flex; align-items: center; }

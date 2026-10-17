@@ -89,7 +89,12 @@ export interface EditorState {
   redo: () => void
   setUi: (patch: Partial<UiState> | ((ui: UiState) => Partial<UiState>)) => void
   selectPart: (partId: Id | null) => void
-  markSaved: () => void
+  /**
+   * The document is where it lives. Given the document that was written, the
+   * mark clears only if nothing has changed since: a write that finishes
+   * after another edit leaves that edit unsaved.
+   */
+  markSaved: (written?: Project) => void
   /** Live, non-undoable preview of an edit in progress (drags). `endPreview` restores and optionally commits once. */
   beginPreview: () => void
   preview: (recipe: (d: Project) => void) => void
@@ -227,8 +232,8 @@ export const editorStore = createStore<EditorState>()((set, get) => {
       })
     },
 
-    markSaved() {
-      set({ dirty: false })
+    markSaved(written) {
+      set(s => (written && (s.previewBase ?? s.doc) !== written ? {} : { dirty: false }))
     },
 
     previewBase: null,

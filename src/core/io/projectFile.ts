@@ -15,6 +15,16 @@ export const PROJECT_EXT = 'tsprite'
 
 interface ImageRef { $file: string; width: number; height: number }
 
+// Document images are never written in place: an edit draws into a copy and
+// swaps it in (see the editor store). So an image's PNG stays valid for as
+// long as the image lives, and an autosave re-encodes only what changed.
+const pngCache = new WeakMap<PartImage, Uint8Array>()
+function cachedPng(img: PartImage): Uint8Array {
+  let png = pngCache.get(img)
+  if (!png) { png = pngFromImage(img); pngCache.set(img, png) }
+  return png
+}
+
 export function encodeProject(p: Project): Uint8Array {
   const files: Record<string, Uint8Array> = {}
   const json = JSON.parse(JSON.stringify(p, (_key, value) => {
@@ -29,7 +39,7 @@ export function encodeProject(p: Project): Uint8Array {
       target.images = {}
       for (const [k, img] of Object.entries(v.images)) {
         const name = `parts/${partId}/${variantId}/v${k}.png`
-        files[name] = pngFromImage(img)
+        files[name] = cachedPng(img)
         target.images[Number(k)] = { $file: name, width: img.width, height: img.height }
       }
     }
@@ -72,7 +82,10 @@ export function decodeProject(bytes: Uint8Array): DecodedProject {
         const data = entries[ref.$file]
         if (!data) { warnings.push(`Missing image ${ref.$file}`); continue }
         try {
-          images[Number(k)] = imageFromPng(data)
+          const img = imageFromPng(data)
+          // The file's own PNG decodes to these pixels, so it can be written back as it is.
+          pngCache.set(img, data)
+          images[Number(k)] = img
         } catch (e) {
           warnings.push(`Could not read ${ref.$file}: ${e instanceof Error ? e.message : String(e)}`)
         }

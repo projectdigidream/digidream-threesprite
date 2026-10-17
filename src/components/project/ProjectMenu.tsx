@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { getLibrary, type RecentEntry } from '../../core/io/library'
-import { importPngAsPart, openProjectFromDisk, openRecent, removeFromLibrary, saveProject, saveProjectAs } from '../../core/io/projectActions'
-import { isTauri, isVscode } from '../../core/platform'
+import { autosaveNow, importPngAsPart, leaveCurrent, openProjectFromDisk, openRecent, removeFromLibrary, saveProject, saveProjectAs } from '../../core/io/projectActions'
+import { isAndroid, isTauri, isVscode } from '../../core/platform'
 import { isTypingTarget } from '../../hooks/useKeyboardShortcuts'
 import { askConfirm } from '../../core/ui/dialogs'
+import { autosaveStore, useAutosaveState } from '../../store/autosave'
 import { useEditor } from '../../store/editorStore'
 import { Icon } from '../ui/Icon'
 
@@ -15,7 +16,6 @@ interface Props {
 
 /** The file menu: new / open / save / save as / import PNG / recent projects. */
 export default function ProjectMenu({ onNew, onClose, notify }: Props) {
-  const dirty = useEditor(s => s.dirty)
   const source = useEditor(s => s.source)
   const docId = useEditor(s => s.doc.id)
   const [recent, setRecent] = useState<RecentEntry[]>([])
@@ -23,10 +23,17 @@ export default function ProjectMenu({ onNew, onClose, notify }: Props) {
   // Inside VS Code the tab is the file: opening, creating and saving elsewhere
   // belong to the editor, not to this menu.
   const hosted = isVscode()
+  // Only the desktop keeps a project in a file of its own; elsewhere it lives in the library.
+  const linkable = tauri && !isAndroid() && !hosted
+  const toFile = useAutosaveState(a => a.toFile)
+  const failed = useAutosaveState(a => (a.failed?.id === docId ? a.failed.message : null))
 
   useEffect(() => { if (!hosted) getLibrary().list().then(setRecent).catch(() => setRecent([])) }, [hosted])
 
-  const guard = async () => !dirty || (await askConfirm('Discard unsaved changes in the current project?', { okLabel: 'Discard', danger: true }))
+  const setToFile = (on: boolean) => {
+    autosaveStore.getState().setToFile(on)
+    if (on && source.path) autosaveNow().catch(e => notify(`Autosave failed: ${e instanceof Error ? e.message : String(e)}`, 'error'))
+  }
 
   const run = async (fn: () => Promise<unknown>, done?: string) => {
     try {
@@ -42,18 +49,25 @@ export default function ProjectMenu({ onNew, onClose, notify }: Props) {
     <div className="menu-backdrop" onClick={onClose}>
       <div className="menu" onClick={e => e.stopPropagation()} role="menu">
         {!hosted && <button className="menu__item" onClick={() => { onClose(); onNew() }}><Icon name="new" size={16} /> New project… <kbd>Ctrl N</kbd></button>}
-        {!hosted && <button className="menu__item" onClick={async () => { if (await guard()) run(openProjectFromDisk) }}><Icon name="folder" size={16} /> Open… <kbd>Ctrl O</kbd></button>}
+        {!hosted && <button className="menu__item" onClick={async () => { if (await leaveCurrent()) run(openProjectFromDisk) }}><Icon name="folder" size={16} /> Open… <kbd>Ctrl O</kbd></button>}
         <button className="menu__item" onClick={() => run(saveProject, hosted ? undefined : 'Saved')}><Icon name="save" size={16} /> Save <kbd>Ctrl S</kbd></button>
         {!hosted && <button className="menu__item" onClick={() => run(saveProjectAs, 'Saved')}><Icon name="export" size={16} /> {tauri ? 'Save as…' : 'Download project…'}</button>}
         <button className="menu__item" onClick={() => run(importPngAsPart, 'Imported as a new part')}><Icon name="layers" size={16} /> Import PNG as part…</button>
-        <div className="menu__meta">{hosted ? (source.path ?? 'Open in VS Code') : source.path ? source.path : 'Stored in the app library'}</div>
+        <div className="menu__meta">{hosted ? (source.path ?? 'Open in VS Code') : source.path ? source.path : 'Stored in the app library, saved automatically'}</div>
+        {!hosted && failed && <div className="menu__meta menu__meta--error">Autosave failed: {failed}</div>}
+        {linkable && (
+          <label className="menu__toggle" title="A project saved to a file is written there a second after each change. Off: the file changes only when you save, and the app keeps a recovery copy meanwhile.">
+            <input type="checkbox" checked={toFile} onChange={e => setToFile(e.target.checked)} />
+            Save to the file automatically
+          </label>
+        )}
         {recent.length > 0 && (
           <>
             <div className="menu__header">Recent</div>
             <div className="menu__recent">
               {recent.map(r => (
                 <div key={r.id} className={`menu__recent-row ${r.id === docId ? 'is-current' : ''}`}>
-                  <button className="menu__recent-open" onClick={async () => { if (r.id === docId) { onClose(); return } if (await guard()) run(() => openRecent(r).then(res => { if (res.warnings.length) notify(res.warnings.join('\n')); return res })) }}>
+                  <button className="menu__recent-open" onClick={async () => { if (r.id === docId) { onClose(); return } if (await leaveCurrent()) run(() => openRecent(r).then(res => { if (res.warnings.length) notify(res.warnings.join('\n')); return res })) }}>
                     {r.thumb ? <img src={r.thumb} alt="" className="menu__thumb" /> : <span className="menu__thumb" />}
                     <span className="menu__recent-name">{r.name}</span>
                     <span className="menu__recent-date">{new Date(r.modifiedAt).toLocaleDateString()}</span>
@@ -80,7 +94,7 @@ export function useFileShortcuts(onNew: () => void, notify: (msg: string, kind?:
       const hosted = isVscode()
       try {
         if (k === 's') { e.preventDefault(); if (e.shiftKey && !hosted) await saveProjectAs(); else { await saveProject(); if (!hosted) notify('Saved') } }
-        else if (k === 'o' && !hosted) { e.preventDefault(); await openProjectFromDisk() }
+        else if (k === 'o' && !hosted) { e.preventDefault(); if (await leaveCurrent()) await openProjectFromDisk() }
         else if (k === 'n' && !hosted) { e.preventDefault(); onNew() }
       } catch (err) {
         notify(err instanceof Error ? err.message : String(err), 'error')

@@ -37,6 +37,20 @@ function mergeRecent(list: RecentEntry[], entry: RecentEntry): RecentEntry[] {
 
 // ── Tauri: files under AppData ───────────────────────────────────────────────
 
+/**
+ * Replace a file under AppData whole or not at all: it is written beside the
+ * old one, then renamed over it. Autosave rewrites the library often, also as
+ * the app goes to the background, when Android may end it mid-write.
+ */
+export async function replaceAppDataFile(path: string, data: Uint8Array | string): Promise<void> {
+  const fs = await import('@tauri-apps/plugin-fs')
+  const baseDir = fs.BaseDirectory.AppData
+  const part = `${path}.${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}.part`
+  if (typeof data === 'string') await fs.writeTextFile(part, data, { baseDir })
+  else await fs.writeFile(part, data, { baseDir })
+  await fs.rename(part, path, { oldPathBaseDir: baseDir, newPathBaseDir: baseDir })
+}
+
 const tauriLibrary: ProjectLibrary = {
   async list() {
     const fs = await import('@tauri-apps/plugin-fs')
@@ -50,7 +64,7 @@ const tauriLibrary: ProjectLibrary = {
   async save(entry, bytes) {
     const fs = await import('@tauri-apps/plugin-fs')
     await fs.mkdir('projects', { baseDir: fs.BaseDirectory.AppData, recursive: true })
-    await fs.writeFile(`projects/${entry.id}.tsprite`, bytes, { baseDir: fs.BaseDirectory.AppData })
+    await replaceAppDataFile(`projects/${entry.id}.tsprite`, bytes)
     await this.touchRecent(entry)
   },
   async load(id) {
@@ -65,14 +79,13 @@ const tauriLibrary: ProjectLibrary = {
     const fs = await import('@tauri-apps/plugin-fs')
     try { await fs.remove(`projects/${id}.tsprite`, { baseDir: fs.BaseDirectory.AppData }) } catch { /* absent */ }
     try { await fs.remove(`autosave/${id}.tsprite`, { baseDir: fs.BaseDirectory.AppData }) } catch { /* absent */ }
-    const list = (await this.list()).filter(e => e.id !== id)
-    await fs.writeTextFile('recent.json', JSON.stringify(list), { baseDir: fs.BaseDirectory.AppData })
+    await replaceAppDataFile('recent.json', JSON.stringify((await this.list()).filter(e => e.id !== id)))
   },
   async saveAutosave(id, bytes) {
     const fs = await import('@tauri-apps/plugin-fs')
     await fs.mkdir('autosave', { baseDir: fs.BaseDirectory.AppData, recursive: true })
-    await fs.writeFile(`autosave/${id}.tsprite`, bytes, { baseDir: fs.BaseDirectory.AppData })
-    await fs.writeTextFile(`autosave/${id}.json`, JSON.stringify({ modifiedAt: new Date().toISOString() }), { baseDir: fs.BaseDirectory.AppData })
+    await replaceAppDataFile(`autosave/${id}.tsprite`, bytes)
+    await replaceAppDataFile(`autosave/${id}.json`, JSON.stringify({ modifiedAt: new Date().toISOString() }))
   },
   async loadAutosave(id) {
     const fs = await import('@tauri-apps/plugin-fs')
@@ -92,8 +105,7 @@ const tauriLibrary: ProjectLibrary = {
   async touchRecent(entry) {
     const fs = await import('@tauri-apps/plugin-fs')
     await fs.mkdir('', { baseDir: fs.BaseDirectory.AppData, recursive: true }).catch(() => {})
-    const list = mergeRecent(await this.list(), entry)
-    await fs.writeTextFile('recent.json', JSON.stringify(list), { baseDir: fs.BaseDirectory.AppData })
+    await replaceAppDataFile('recent.json', JSON.stringify(mergeRecent(await this.list(), entry)))
   },
 }
 

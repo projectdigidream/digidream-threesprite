@@ -9,6 +9,7 @@ import { createProject } from '../domain/project'
 import { DEFAULT_OPTIONS } from './export/types'
 import { buildManifest, collectFrames, encodeBundle } from './io/exportBundle'
 import { invokeBytes, invokeWithBytes } from './io/ipc'
+import { replaceAppDataFile } from './io/library'
 import { isTauri } from './platform'
 
 export interface SelfTestReport { ok: boolean; steps: { name: string; ok: boolean; detail: string }[]; platform: string }
@@ -52,6 +53,15 @@ export async function runSelfTest(): Promise<SelfTestReport> {
     const back = await fs.readTextFile('selftest-dir/hello.txt', { baseDir: fs.BaseDirectory.AppData })
     if (back !== 'hello') throw new Error('read back mismatch')
     return await appDataDir()
+  })
+  await step('appdata replace whole', async () => {
+    await replaceAppDataFile('selftest-dir/replace.bin', new Uint8Array([1, 2, 3, 4]))
+    await replaceAppDataFile('selftest-dir/replace.bin', new Uint8Array([5, 6]))
+    const back = await fs.readFile('selftest-dir/replace.bin', { baseDir: fs.BaseDirectory.AppData })
+    if (back.join() !== '5,6') throw new Error(`read back ${back.join()}`)
+    const left = (await fs.readDir('selftest-dir', { baseDir: fs.BaseDirectory.AppData })).filter(e => e.name.endsWith('.part'))
+    if (left.length) throw new Error(`left behind: ${left.map(e => e.name).join(', ')}`)
+    return 'replaced by rename'
   })
   await step('export_bundle → dir', async () => {
     const p = createProject({ canvasSize: 16, viewCount: 8, spriteName: 'TEST' })
