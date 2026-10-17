@@ -451,6 +451,12 @@ input[type='text'], input:not([type]), input[inputmode] {
 .pixel-canvas__banner--small button { min-height: 24px; padding: 0 6px; font-size: 11px; }
 /* said once, in passing, and never in the way: it fades itself out */
 .pixel-canvas__banner--hint { pointer-events: none; animation: hint-in 120ms ease-out; }
+/* the canvas's own corner: its background, and the bones in Animate */
+.pixel-canvas__corner { position: absolute; top: 6px; right: 6px; display: flex; gap: 4px; align-items: flex-start; z-index: 2; }
+.pixel-canvas__corner > .icon-btn, .pixel-canvas__backgrounds { background: rgba(31, 36, 48, 0.85); border: 1px solid var(--border); }
+.pixel-canvas__corner > .icon-btn.is-active { border-color: var(--accent-2); }
+.pixel-canvas__backgrounds { position: absolute; top: calc(100% + 4px); right: 0; display: flex; gap: 4px; padding: 4px; border-radius: var(--radius); }
+.pixel-canvas__swatch { display: block; width: 18px; height: 18px; border-radius: 4px; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.3); }
 @keyframes hint-in { from { opacity: 0; transform: translate(-50%, 6px); } to { opacity: 1; transform: translate(-50%, 0); } }
 
 /* A short screen is a phone held sideways, where a full-size banner would take

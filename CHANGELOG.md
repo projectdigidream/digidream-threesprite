@@ -27,6 +27,12 @@ anything not released yet is under **Unreleased**.
 
 ### Added
 
+- **A choice of canvas background**, in the canvas's top-right corner: dark
+  checks (as before), light checks, grey, white or black, so dark art does not
+  vanish into the dark checks. Kept on the device, not in the sprite.
+- **The bones can be hidden in Animate**, with the bone button in the same
+  corner, and hide by themselves while the animation plays. Hidden bones
+  cannot be dragged; Rig always shows them.
 - **Switch a part's variant from the timeline.** With a part's row picked,
   the timeline's bar shows its variant at the current frame; choosing another
   keys the switch there, and the diamond beside it adds or removes that key.

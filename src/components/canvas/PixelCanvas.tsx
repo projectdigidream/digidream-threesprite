@@ -21,7 +21,9 @@ import type { Id, PartImage, Project, Vec2, Vec3 } from '../../domain/types'
 import { isDerived, mirrorOf, viewLabel } from '../../domain/views'
 import { isTypingTarget } from '../../hooks/useKeyboardShortcuts'
 import { frameCache } from '../../store/caches'
+import { backgroundOf, canvasPrefs } from '../../store/canvasPrefs'
 import { editorStore, shownVariant, type EditorState, type Mode, useEditor } from '../../store/editorStore'
+import CanvasCorner from './CanvasCorner'
 import { boneFromDrag, drawRigOverlay, hitRig, type RigDrag, rigDragMove, screenDeltaToBoneLocal } from './rigOverlay'
 
 type Pt = { x: number; y: number }
@@ -104,6 +106,12 @@ function nearestImageView(doc: Project, partId: Id, variantId: Id, view: number)
 
 function dist(a: Pt, b: Pt): number { return Math.hypot(a.x - b.x, a.y - b.y) }
 
+/** Rig always draws its bones; Animate does unless they were hidden, and never while it plays. */
+function bonesShown(s: EditorState, mode: Mode): boolean {
+  if (mode === 'rig') return true
+  return mode === 'animate' && canvasPrefs.getState().bones && !s.ui.playing
+}
+
 interface Props {
   /** Fixed view for an embedded canvas. */
   view?: number
@@ -116,7 +124,7 @@ export default function PixelCanvas({ view: viewProp, embedded = false }: Props)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const offRef = useRef<HTMLCanvasElement | null>(null)
   const onionRef = useRef<HTMLCanvasElement | null>(null)
-  const checkerRef = useRef<CanvasPattern | null>(null)
+  const checkerRef = useRef<{ id: string; pattern: CanvasPattern | null } | null>(null)
   const outRef = useRef<Uint8ClampedArray | null>(null)
   const overridesRef = useRef(new Map<string, PartImage>())
   const gestureRef = useRef<Gesture>({ kind: 'idle' })
@@ -190,18 +198,19 @@ export default function PixelCanvas({ view: viewProp, embedded = false }: Props)
     const curMode = modeOf(s)
     const curView = viewOf(s)
 
-    // checkerboard under the canvas area
-    if (!checkerRef.current) {
+    // the background the art is drawn over: checks, or one colour (the corner picks it)
+    const bg = backgroundOf(canvasPrefs.getState().background)
+    if (checkerRef.current?.id !== bg.id) {
       const c = document.createElement('canvas')
       c.width = 16; c.height = 16
       const cc = c.getContext('2d')!
-      cc.fillStyle = '#2a3040'; cc.fillRect(0, 0, 16, 16)
-      cc.fillStyle = '#343b4d'; cc.fillRect(0, 0, 8, 8); cc.fillRect(8, 8, 8, 8)
-      checkerRef.current = ctx.createPattern(c, 'repeat')
+      cc.fillStyle = bg.a; cc.fillRect(0, 0, 16, 16)
+      cc.fillStyle = bg.b; cc.fillRect(0, 0, 8, 8); cc.fillRect(8, 8, 8, 8)
+      checkerRef.current = { id: bg.id, pattern: ctx.createPattern(c, 'repeat') }
     }
     ctx.save()
     ctx.translate(px, py)
-    ctx.fillStyle = checkerRef.current ?? '#2a3040'
+    ctx.fillStyle = checkerRef.current.pattern ?? bg.a
     ctx.fillRect(0, 0, n * z, n * z)
     ctx.restore()
 
@@ -283,7 +292,7 @@ export default function PixelCanvas({ view: viewProp, embedded = false }: Props)
       }
     }
 
-    if (curMode === 'rig' || curMode === 'animate') {
+    if (bonesShown(s, curMode)) {
       drawRigOverlay(ctx, doc, ui, animId, frame, curView, (x, y) => ({ x: px + x * z, y: py + y * z }), gestureRef.current.kind === 'rig' ? gestureRef.current.drag : null)
       const g = gestureRef.current
       if (g.kind === 'addBone') {
@@ -301,6 +310,7 @@ export default function PixelCanvas({ view: viewProp, embedded = false }: Props)
   }, [redraw])
 
   useEffect(() => editorStore.subscribe(schedule), [schedule])
+  useEffect(() => canvasPrefs.subscribe(schedule), [schedule])
 
   // size tracking + initial fit
   useEffect(() => {
@@ -474,7 +484,8 @@ export default function PixelCanvas({ view: viewProp, embedded = false }: Props)
           schedule()
           return
         }
-        const hit = hitRig(doc, ui, curMode === 'animate' ? ui.animId : null, curMode === 'animate' ? ui.frame : 0, curView, c, (e.pointerType === 'touch' ? 24 : 14) / zoom)
+        // bones that are not drawn cannot be grabbed: the drag pans instead
+        const hit = bonesShown(s, curMode) ? hitRig(doc, ui, curMode === 'animate' ? ui.animId : null, curMode === 'animate' ? ui.frame : 0, curView, c, (e.pointerType === 'touch' ? 24 : 14) / zoom) : null
         if (hit) {
           if (hit.boneId !== ui.selectedBoneId && hit.handle !== 'pivot') s.setUi({ selectedBoneId: hit.boneId })
           gestureRef.current = { kind: 'rig', pointerId: e.pointerId, drag: hit }
@@ -804,6 +815,7 @@ export default function PixelCanvas({ view: viewProp, embedded = false }: Props)
         </div>
       )}
       {hint && <div className="pixel-canvas__banner pixel-canvas__banner--small pixel-canvas__banner--hint">{hint}</div>}
+      {!embedded && <CanvasCorner mode={mode} />}
       {mode === 'rig' && rigTool === 'addBone' && !embedded && (
         <div className="pixel-canvas__banner">Press at the new bone's root and drag to its tip (child of the selected bone). Esc cancels.</div>
       )}
