@@ -222,7 +222,7 @@ export default function PaletteEditor({ onClose }: Props) {
           <button className="text-btn" onClick={remove} disabled={doc.paletteOrder.length <= 1} title={doc.paletteOrder.length <= 1 ? 'A project keeps at least one palette' : 'Delete this palette'}><Icon name="trash" size={14} />Delete</button>
         </div>
 
-        <section>
+        <section className="paled__colours">
           <h4>Colours · {pal.colors.length}</h4>
           <div className="paled__grid">
             {pal.colors.map((c, i) => (
@@ -239,7 +239,7 @@ export default function PaletteEditor({ onClose }: Props) {
           </div>
         </section>
 
-        <section>
+        <section className="paled__selected">
           <h4>Selected colour</h4>
           {current ? (
             <div className="paled__editor">
@@ -264,7 +264,7 @@ export default function PaletteEditor({ onClose }: Props) {
           </label>
         </section>
 
-        <section>
+        <section className="paled__presets">
           <h4>New palette from a preset</h4>
           <div className="chips">
             {PRESET_PALETTES.map(p => (

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useLandscape } from '../../hooks/useIsMobile'
 import { useEditor } from '../../store/editorStore'
 import PixelCanvas from '../canvas/PixelCanvas'
 import PalettePanel from '../panels/PalettePanel'
@@ -17,20 +18,35 @@ export default function MobileLayout() {
   const mode = useEditor(s => s.ui.mode)
   const canvasMode = mode === 'draw' || mode === 'rig' || mode === 'animate'
   const [sheet, setSheet] = useState<Sheet>(null)
+  // Held sideways, the rail has room under the tools and colours for a panel
+  // at all times: the two buttons switch it between Parts and Solids instead
+  // of opening and closing a sheet over the canvas. Kept apart from the sheet,
+  // so picking a tab there does not open one over the 3D view's canvas.
+  const [railTab, setRailTab] = useState<Exclude<Sheet, null>>('parts')
+  const landscape = useLandscape()
+  const railSheet = landscape && mode === 'draw'
+  const shown: Sheet = railSheet ? railTab : sheet
+  const pick = (which: Exclude<Sheet, null>) => (railSheet ? setRailTab(which) : setSheet(s => (s === which ? null : which)))
 
+  const toggles = (
+    <>
+      <button className={`icon-btn ${shown === 'parts' ? 'is-active' : ''}`} title="Parts" onClick={() => pick('parts')}><Icon name="layers" /></button>
+      <button className={`icon-btn ${shown === 'solids' ? 'is-active' : ''}`} title="Solids" onClick={() => pick('solids')}><Icon name="cube" /></button>
+    </>
+  )
   const strips = (
     <div className="mobile__strips">
       <div className="mobile__strip-row">
         <ToolPanel horizontal />
-        <button className={`icon-btn ${sheet === 'parts' ? 'is-active' : ''}`} title="Parts" onClick={() => setSheet(s => (s === 'parts' ? null : 'parts'))}><Icon name="layers" /></button>
-        <button className={`icon-btn ${sheet === 'solids' ? 'is-active' : ''}`} title="Solids" onClick={() => setSheet(s => (s === 'solids' ? null : 'solids'))}><Icon name="cube" /></button>
+        {!railSheet && toggles}
       </div>
       <PalettePanel compact />
+      {railSheet && <div className="mobile__sheet-switch">{toggles}</div>}
     </div>
   )
-  const sheetPane = sheet && (
+  const sheetPane = shown && (
     <div className="mobile__sheet">
-      {sheet === 'parts' ? <PartList /> : <SolidsPanel compact />}
+      {shown === 'parts' ? <PartList /> : <SolidsPanel compact />}
     </div>
   )
 
@@ -47,7 +63,7 @@ export default function MobileLayout() {
             {strips}
           </div>
         </div>
-        <TabBar bottom />
+        {!landscape && <TabBar bottom />}
       </div>
     )
   }
@@ -72,7 +88,7 @@ export default function MobileLayout() {
           {mode === 'animate' && <div className="mobile__sheet"><ModePane mode={mode} bottom /><ModePane mode={mode} side /></div>}
         </div>
       </div>
-      <TabBar bottom />
+      {!landscape && <TabBar bottom />}
     </div>
   )
 }

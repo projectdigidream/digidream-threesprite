@@ -182,9 +182,14 @@ input[type='text'], input:not([type]), input[inputmode] {
 @media (orientation: landscape) {
   .mobile__body { display: flex; flex: 1; min-height: 0; flex-direction: row; }
   .mobile__col { display: flex; flex: 1; min-width: 0; min-height: 0; flex-direction: column; }
+  /* The canvas column keeps the square a sprite can use (as tall as the body,
+     plus the view column) and the rail takes the rest of the width, within
+     reason: a wide rail fits the tools in fewer rows and more of the palette. */
+  .mobile { --viewcol: 54px; --bodyh: calc(100dvh - var(--toolbar-h) - env(safe-area-inset-top, 0px)); }
   .mobile__rail {
     display: flex; flex-direction: column; flex: none;
-    width: min(46%, 360px); min-height: 0; overflow: hidden;
+    width: clamp(300px, calc(100% - var(--bodyh) - var(--viewcol)), 520px);
+    min-height: 0; overflow: hidden;
     border-left: 1px solid var(--border); background: var(--bg-2);
   }
   .mobile__rail:empty { display: none; }
@@ -192,20 +197,38 @@ input[type='text'], input:not([type]), input[inputmode] {
      when the rail is short — they scroll inside their own share — so the
      colours stay in sight and the panel below always has room. */
   .mobile__rail .mobile__strips {
-    order: -1; flex: none; max-height: 62%; display: flex; flex-direction: column; overflow: hidden;
+    order: -1; flex: none; max-height: 72%; overflow: hidden;
     border-top: none; border-bottom: 1px solid var(--border);
+    /* tools across the top; the current colours with the Parts / Solids switch
+       beside them; then every swatch across the rail's whole width */
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center;
+    grid-template-areas: 'tools tools' 'current switch' 'swatches swatches';
   }
-  .mobile__rail .mobile__strips:only-child { max-height: none; border-bottom: none; }
-  .mobile__rail .mobile__strip-row { flex: 0 1 auto; min-height: 0; flex-wrap: nowrap; align-items: stretch; }
-  /* the two sheet toggles stay put at the top while the tools scroll past them */
-  .mobile__rail .mobile__strip-row > .icon-btn { flex: none; align-self: flex-start; }
-  .mobile__rail .palette { flex: none; }
+  .mobile__rail .mobile__strip-row { grid-area: tools; }
+  .mobile__rail .mobile__sheet-switch { grid-area: switch; display: flex; gap: 2px; padding-right: 8px; }
+  .mobile__rail .palette--compact { display: contents; }
+  .mobile__rail .palette--compact .palette__current { grid-area: current; padding: 0 8px; }
+  .mobile__rail .mobile__strip-row { min-height: 0; flex-wrap: nowrap; align-items: stretch; }
+  /* every colour in reach: the swatches wrap into rows instead of scrolling sideways */
+  .mobile__rail .palette--compact .palette__grid { grid-area: swatches; min-width: 0; flex-wrap: wrap; max-height: 100px; overflow-y: auto; padding: 4px 8px 6px; }
   .mobile__rail .mobile__sheet { flex: 1; min-height: 0; max-height: none; border-top: none; }
   /* a rail is narrow: the tool buttons wrap down it instead of scrolling sideways */
   .mobile__rail .tool-panel--h { flex: 1 1 auto; min-width: 0; flex-wrap: wrap; overflow-x: visible; overflow-y: auto; }
   .mobile__rail .part-list__rows,
   .mobile__rail .bone-tree__rows,
   .mobile__rail .solids__rows { max-height: none; }
+
+  /* the modes, up in the toolbar (see Toolbar) */
+  .app--mobile .toolbar .tab-bar { flex: none; }
+  .app--mobile .toolbar .tab { padding: 0 8px; gap: 4px; font-size: 12px; }
+  /* The views run down the canvas's left edge: a square sprite cannot use the
+     width a landscape screen has, but every row of height is canvas. */
+  .mobile__col { flex-direction: row; }
+  .mobile__col > .view-strip, .studio-mobile__2d > .view-strip {
+    flex-direction: column; overflow-x: hidden; overflow-y: auto; padding: 4px; width: var(--viewcol);
+    border-bottom: none; border-right: 1px solid var(--border);
+  }
+  .mobile__col > .view-strip .view-tab, .studio-mobile__2d > .view-strip .view-tab { min-width: 0; width: 100%; }
 }
 
 /* ── canvas ────────────────────────────────────────────────────────────────── */
@@ -440,18 +463,34 @@ input[type='text'], input:not([type]), input[inputmode] {
   /* without a floor of 0 the view strip and tool row hold the 2D pane open and
      push the pair wider than the screen */
   .studio-mobile__3d { flex: 1; min-width: 0; border-bottom: none; border-right: 1px solid var(--border); }
-  .studio-mobile__2d { flex: 1; min-width: 0; }
+  /* The drawing side is as wide as the square its canvas can have under the
+     tool and colour rows, with the views down its left; the 3D view takes the
+     rest, which leaves its bar room to show its controls. */
+  .studio-mobile__2d {
+    flex: 0 0 max(260px, calc(var(--bodyh) - 106px + var(--viewcol))); min-width: 0;
+    display: grid; grid-template-columns: var(--viewcol) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto auto;
+  }
+  .studio-mobile__2d > .view-strip { grid-row: 1; grid-column: 1; }
+  .studio-mobile__2d > .pixel-canvas { grid-row: 1; grid-column: 2; }
+  .studio-mobile__2d > .mobile__sheet, .studio-mobile__2d > .mobile__strips { grid-column: 1 / -1; }
+  /* a percentage has nothing to resolve against in an auto row */
+  .studio-mobile__2d > .mobile__sheet { max-height: calc(var(--bodyh) * 0.3); }
 }
 
 /* keep the 3D viewport tall on phones: the transport scrolls sideways instead of wrapping */
 .app--mobile .preview3d__bar { flex-wrap: nowrap; overflow-x: auto; }
 .app--mobile .preview3d__bar > * { flex: none; }
 .app--mobile .preview3d__facing input[type='range'] { width: 90px; }
+@media (orientation: landscape) {
+  .app--mobile .preview3d__bar { gap: 4px; }
+  .app--mobile .preview3d__scrub, .app--mobile .preview3d__facing input[type='range'] { width: 64px; }
+}
 
 /* ── export ────────────────────────────────────────────────────────────────── */
 
 .export { flex: 1; min-height: 0; overflow: auto; display: grid; grid-template-columns: minmax(280px, 1fr) minmax(280px, 1fr); gap: 16px; padding: 16px; }
 .app--mobile .export { grid-template-columns: 1fr; padding: 12px; }
+@media (orientation: landscape) { .app--mobile .export { grid-template-columns: 1fr 1fr; } }
 .export__col { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .export h3 { margin: 6px 0 0; font-size: 12px; color: var(--fg-dim); text-transform: uppercase; letter-spacing: 0.04em; }
 .export__formats { display: flex; flex-direction: column; gap: 6px; }
@@ -486,11 +525,38 @@ input[type='text'], input:not([type]), input[inputmode] {
 .menu__recent-date { font-size: 11px; color: var(--fg-dim); }
 .toast { position: fixed; left: 50%; bottom: calc(16px + env(safe-area-inset-bottom)); transform: translateX(-50%); background: var(--bg-3); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px; max-width: min(520px, calc(100vw - 32px)); white-space: pre-wrap; z-index: 60; box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
 .app--mobile .toast { bottom: calc(var(--tabbar-h) + 12px + env(safe-area-inset-bottom)); }
+@media (orientation: landscape) { .app--mobile .toast { bottom: calc(12px + env(safe-area-inset-bottom)); } }
 .toast--error { border-color: var(--danger); color: #ffd3d3; }
 
 /* ── help ──────────────────────────────────────────────────────────────────── */
 
 .modal--wide { width: min(640px, 100%); }
+/* A phone held sideways has the width for two columns and not the height for
+   one: forms and the palette editor spread their fields side by side. A grid,
+   not CSS columns, so a form taller than the screen still scrolls down. */
+@media (orientation: landscape) {
+  .app--mobile .modal-backdrop { padding: 8px; }
+  .app--mobile .modal--form {
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px 20px; align-items: start;
+    width: min(880px, 100%); padding: 14px 16px;
+  }
+  .app--mobile .modal--form > h2, .app--mobile .modal--form > .modal__actions { grid-column: 1 / -1; }
+}
+/* The palette editor is portalled to <body>, outside `.app--mobile`: the short
+   screen is what marks a phone held sideways there. */
+@media (orientation: landscape) and (max-height: 520px) {
+  .modal-backdrop:has(> .paled) { padding: 8px; }
+  .paled {
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px 20px; align-items: start;
+    width: min(880px, 100%); padding: 14px 16px;
+    grid-template-areas: 'head head' 'row sel' 'cols sel' 'pre pre';
+  }
+  .paled > .paled__head { grid-area: head; }
+  .paled > .paled__row { grid-area: row; }
+  .paled > .paled__colours { grid-area: cols; }
+  .paled > .paled__selected { grid-area: sel; }
+  .paled > .paled__presets { grid-area: pre; }
+}
 .help__section h4 { margin: 4px 0 6px; font-size: 12px; color: var(--accent-2); text-transform: uppercase; letter-spacing: 0.04em; }
 .help__table { border-collapse: collapse; width: 100%; font-size: 13px; }
 .help__table td { padding: 3px 8px 3px 0; vertical-align: top; }
@@ -574,6 +640,24 @@ button.danger { background: var(--danger); color: #2a0b0b; border-color: transpa
 .mobile__sheet .transport__field { font-size: 11px; }
 .mobile__sheet .transport__field input[inputmode] { width: 44px; min-height: 28px; }
 .mobile__sheet .transport__frame { min-width: 48px; font-size: 11px; }
+
+/* Sideways, Animate's rail is the timeline's: it fills the rail's height, with
+   the header of the keys at the frame showing under it and their fields a
+   scroll away. Posing is done on the canvas; the timeline is what moves
+   between frames, so its rows get a finger's height. */
+@media (orientation: landscape) {
+  .mobile--animate .mobile__rail .timeline { min-height: 0; max-height: none; height: calc(100% - 34px); }
+}
+@media (orientation: landscape) and (pointer: coarse) {
+  /* the rail is wider than an upright phone: the number fields' steppers can be pressed with a finger */
+  .mobile__rail .numfield__ctl input { min-height: 32px; }
+  .mobile__rail .numfield__btn { min-height: 32px; width: 32px; min-width: 32px; }
+  .mobile--animate .mobile__rail .timeline { --timeline-cell: 30px; }
+  .mobile--animate .mobile__rail .timeline__labels { width: 120px; }
+  .mobile--animate .mobile__rail .timeline__label,
+  .mobile--animate .mobile__rail .timeline__row,
+  .mobile--animate .mobile__rail .timeline__cell { height: 30px; min-height: 30px; }
+}
 
 /* ── dither settings (shown while the dither tool is active) ───────────────── */
 

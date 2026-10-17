@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import { copyKeys, deleteRowKeys, moveRowKeys, pasteKeys, pastedRefs, rowKeyFrames, type KeyClipboard, type KeyRef } from '../../domain/animation'
 import { addAnimation, boneOrder, removeAnimation, setFrameCount } from '../../domain/project'
 import type { Animation, Id } from '../../domain/types'
@@ -19,6 +19,22 @@ async function promptNewAnimation(): Promise<void> {
 
 const CELL = 20
 
+/** Width of a frame column: the timeline's `--timeline-cell` when the CSS sets one (wider for fingers), else CELL. */
+function useCellWidth(ref: RefObject<HTMLElement | null>): number {
+  const [cell, setCell] = useState(CELL)
+  useLayoutEffect(() => {
+    const read = () => {
+      const el = ref.current
+      const v = el ? parseFloat(getComputedStyle(el).getPropertyValue('--timeline-cell')) : NaN
+      setCell(v > 0 ? v : CELL)
+    }
+    read()
+    window.addEventListener('resize', read)
+    return () => window.removeEventListener('resize', read)
+  }, [ref])
+  return cell
+}
+
 type RowKind = 'bone' | 'part'
 interface Row { kind: RowKind; id: Id; name: string; depth: number }
 
@@ -31,6 +47,8 @@ export default function Timeline() {
   const commit = useEditor(s => s.commit)
   const anim = ui.animId ? doc.animations[ui.animId] : null
   const gridRef = useRef<HTMLDivElement>(null)
+  const rootRef = useRef<HTMLDivElement>(null)
+  const cell = useCellWidth(rootRef)
   const labelsRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<{ row: Row; from: number; to: number; pointerId: number; el: HTMLElement } | null>(null)
   const longPressRef = useRef(0)
@@ -61,7 +79,7 @@ export default function Timeline() {
     const grid = gridRef.current
     if (!grid || !anim) return 0
     const r = grid.getBoundingClientRect()
-    const f = Math.floor((clientX - r.left + grid.scrollLeft) / CELL)
+    const f = Math.floor((clientX - r.left + grid.scrollLeft) / cell)
     return Math.max(0, Math.min(anim.frameCount - 1, f))
   }
 
@@ -136,7 +154,7 @@ export default function Timeline() {
     const d = dragRef.current
     if (!d || d.pointerId !== e.pointerId) return
     const to = frameFromX(e.clientX)
-    if (to !== d.to) { d.to = to; d.el.style.transform = `translateX(${(to - d.from) * CELL}px)`; setUi({ frame: to }) }
+    if (to !== d.to) { d.to = to; d.el.style.transform = `translateX(${(to - d.from) * cell}px)`; setUi({ frame: to }) }
   }
   const onKeyUp = (e: React.PointerEvent<HTMLElement>) => {
     const d = dragRef.current
@@ -157,7 +175,7 @@ export default function Timeline() {
   }
 
   return (
-    <div className="timeline">
+    <div className="timeline" ref={rootRef}>
       <Transport
         anim={anim}
         selected={liveSel.length}
@@ -194,20 +212,20 @@ export default function Timeline() {
             </div>
           </div>
           <div className="timeline__grid" ref={gridRef} onScroll={e => { if (labelsRef.current) labelsRef.current.scrollTop = e.currentTarget.scrollTop }}>
-            <div className="timeline__header" style={{ width: anim.frameCount * CELL }} onPointerDown={onHeaderDown} onPointerMove={onHeaderMove}>
+            <div className="timeline__header" style={{ width: anim.frameCount * cell }} onPointerDown={onHeaderDown} onPointerMove={onHeaderMove}>
               {Array.from({ length: anim.frameCount }, (_, f) => (
-                <div key={f} className={`timeline__hcell ${f === ui.frame ? 'is-current' : ''}`} style={{ width: CELL }}>{f + 1}</div>
+                <div key={f} className={`timeline__hcell ${f === ui.frame ? 'is-current' : ''}`} style={{ width: cell }}>{f + 1}</div>
               ))}
             </div>
             {rows.map(r => {
               const keys = rowKeyFrames(anim, r.kind, r.id)
               return (
-                <div key={`${r.kind}:${r.id}`} className="timeline__row" style={{ width: anim.frameCount * CELL }}>
+                <div key={`${r.kind}:${r.id}`} className="timeline__row" style={{ width: anim.frameCount * cell }}>
                   {Array.from({ length: anim.frameCount }, (_, f) => (
                     <div
                       key={f}
                       className={`timeline__cell ${f === ui.frame ? 'is-current' : ''}`}
-                      style={{ width: CELL }}
+                      style={{ width: cell }}
                       onClick={e => { setUi({ frame: f }); if (!multi && !(e.metaKey || e.ctrlKey || e.shiftKey)) setSel([]) }}
                     >
                       {keys.has(f) && (
@@ -227,7 +245,7 @@ export default function Timeline() {
                 </div>
               )
             })}
-            <div className="timeline__playhead" style={{ left: ui.frame * CELL + CELL / 2 }} />
+            <div className="timeline__playhead" style={{ left: ui.frame * cell + cell / 2 }} />
           </div>
         </div>
       )}

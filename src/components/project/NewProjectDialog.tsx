@@ -38,7 +38,7 @@ export default function NewProjectDialog({ onClose, defaultName }: Props) {
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()} role="dialog" aria-label="New project">
+      <div className="modal modal--form" onClick={e => e.stopPropagation()} role="dialog" aria-label="New project">
         <h2>New sprite</h2>
         <label className="field">
           <span>Name</span>

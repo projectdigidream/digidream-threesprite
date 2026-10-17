@@ -20,6 +20,9 @@ anything not released yet is under **Unreleased**.
 - **Ctrl+O replaced a project with unsaved changes without asking.**
 - **A failed autosave went unnoticed.** It now says so, and the • after the
   name stays until a save succeeds.
+- **A phone held sideways could squeeze the 3D screen's drawing canvas to a
+  sliver** when the Parts panel was open, worst with Android's navigation bar
+  on the side.
 
 ### Added
 
@@ -40,6 +43,17 @@ anything not released yet is under **Unreleased**.
   you save, unless the option above is on.
 - Saving large sprites is faster: only the images that changed since the last
   save are encoded again.
+- **A phone held sideways gives the canvas the whole height.** The modes move
+  up into the toolbar and the views down the canvas's left edge: on a
+  412-pixel-tall screen the canvas grows from 267 to 368 pixels square. The
+  rail on the right takes the width the square cannot use, so the tools fit in
+  two rows, the whole palette shows, and Parts or Solids stay open under them
+  (two buttons switch between them).
+- Sideways, Animate's timeline fills the rail, with rows and frames sized for
+  a finger; the number fields' − and + are bigger; the 3D screen gives the 3D
+  view the larger share and keeps its drawing canvas square; Export shows the
+  files beside the formats; New sprite, Project settings and Palettes lay their
+  fields out in two columns, so New sprite fits without scrolling.
 
 ## 0.2.0 -- 2026-10-14
 

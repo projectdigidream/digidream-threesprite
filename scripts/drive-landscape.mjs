@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 /**
  * Drives the phone layout in both orientations: upright the panels stack under
- * the canvas, sideways they sit in a rail down the right-hand side. Checks the
- * geometry the browser actually laid out, in every mode.
+ * the canvas, sideways they sit in a rail down the right-hand side, the modes
+ * move up into the toolbar and the views run down the canvas's left edge, so
+ * the canvas keeps the whole height. Checks the geometry the browser actually
+ * laid out, in every mode.
  *   pnpm dev &   then   node scripts/drive-landscape.mjs [outDir]
  */
 import { chromium } from 'playwright-core'
@@ -17,7 +19,7 @@ const PORTRAIT = { width: 412, height: 915 }
 const LANDSCAPE = { width: 915, height: 412 }
 const MODES = ['draw', 'rig', 'animate', 'preview', 'export']
 
-const browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] })
+const browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--mute-audio', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] })
 const errors = []
 const fail = []
 
@@ -37,9 +39,9 @@ async function boxes(page) {
       return { x: Math.round(b.x), y: Math.round(b.y), w: Math.round(b.width), h: Math.round(b.height) }
     })
     return {
-      main: r('.mobile__main'), rail: r('.mobile__rail'), tabs: r('.tab-bar'), panels,
+      main: r('.mobile__main'), rail: r('.mobile__rail'), tabs: r('.tab-bar--bottom'), topTabs: r('.toolbar .tab-bar'), panels,
       studio3d: r('.studio-mobile__3d'), studio2d: r('.studio-mobile__2d'),
-      toolbar: r('.toolbar'),
+      toolbar: r('.toolbar'), views: r('.view-strip'), canvas2d: r('.studio-mobile__2d .pixel-canvas'),
     }
   })
 }
@@ -63,12 +65,23 @@ for (const [name, viewport] of [['portrait', PORTRAIT], ['landscape', LANDSCAPE]
     const p = join(outDir, `${name}-${mode}.png`)
     await page.screenshot({ path: p })
     console.log('shot', p)
-    const { main, rail, tabs, panels, studio3d, studio2d } = await boxes(page)
+    const { main, rail, tabs, topTabs, toolbar, panels, studio3d, studio2d, views, canvas2d } = await boxes(page)
+    // the modes: a bottom bar upright, in the toolbar sideways
+    if (name === 'landscape') {
+      if (tabs && (tabs.w || tabs.h)) fail.push(`landscape/${mode}: the bottom tab bar still takes ${tabs.w}×${tabs.h}`)
+      if (!topTabs || !topTabs.w) fail.push(`landscape/${mode}: no modes in the toolbar`)
+      else if (topTabs.x + topTabs.w > toolbar.x + toolbar.w + 1) fail.push(`landscape/${mode}: the toolbar's modes run off its end`)
+    } else {
+      if (!tabs || !tabs.h) fail.push(`portrait/${mode}: no bottom tab bar`)
+      if (topTabs && (topTabs.w || topTabs.h)) fail.push(`portrait/${mode}: the toolbar shows the modes too`)
+    }
     if (mode === 'preview') {
       // the studio splits itself: stacked upright, side by side sideways
       if (!studio3d || !studio2d) { fail.push(`${name}/preview: no studio panes`); continue }
       console.log(` ${name}/preview 3d ${studio3d.w}×${studio3d.h} @${studio3d.x},${studio3d.y} · 2d ${studio2d.w}×${studio2d.h} @${studio2d.x},${studio2d.y}`)
       if (name === 'landscape' && studio2d.x < studio3d.x + studio3d.w - 1) fail.push('landscape/preview: the studio panes are not side by side')
+      if (name === 'landscape' && studio3d.w < studio2d.w) fail.push(`landscape/preview: the 3D view (${studio3d.w}) is narrower than the drawing side (${studio2d.w})`)
+      if (name === 'landscape' && canvas2d && canvas2d.h < 200) fail.push(`landscape/preview: the drawing canvas is squeezed to ${canvas2d.h}px tall`)
       if (name === 'portrait' && studio2d.y < studio3d.y + studio3d.h - 1) fail.push('portrait/preview: the studio panes are not stacked')
       if (studio2d.x + studio2d.w > viewport.width + 1) fail.push(`${name}/preview: the studio runs ${studio2d.x + studio2d.w - viewport.width}px off the right`)
       continue
@@ -88,8 +101,11 @@ for (const [name, viewport] of [['portrait', PORTRAIT], ['landscape', LANDSCAPE]
       if (rail.x < main.x + main.w - 1) fail.push(`landscape/${mode}: the rail starts at ${rail.x}, left of the canvas edge ${main.x + main.w}`)
       if (rail.y > main.y + 2) fail.push(`landscape/${mode}: the rail starts below the canvas top`)
       if (rail.h < main.h * 0.9) fail.push(`landscape/${mode}: the rail is only ${rail.h} tall against a ${main.h} canvas`)
-      if (main.h < 250) fail.push(`landscape/${mode}: the canvas is squeezed to ${main.h}px tall`)
-      if (rail.w > viewport.width * 0.5) fail.push(`landscape/${mode}: the rail takes ${rail.w} of ${viewport.width}`)
+      // nothing but the toolbar above the canvas, and the canvas at least as wide as it is tall
+      if (main.y > toolbar.y + toolbar.h + 1) fail.push(`landscape/${mode}: the canvas starts at ${main.y}, not under the toolbar`)
+      if (main.h < viewport.height - toolbar.h - 1) fail.push(`landscape/${mode}: the canvas is ${main.h} tall, not the ${viewport.height - toolbar.h} under the toolbar`)
+      if (main.w < main.h - 1) fail.push(`landscape/${mode}: the canvas is narrower (${main.w}) than tall (${main.h})`)
+      if (!views || views.x + views.w > main.x + 1) fail.push(`landscape/${mode}: the views are not down the canvas's left edge`)
       for (const b of panels) if (b.x < rail.x - 1) fail.push(`landscape/${mode}: a panel sits at x=${b.x}, outside the rail at ${rail.x}`)
     } else {
       if (rail.w || rail.h) fail.push(`portrait/${mode}: the rail should be no box at all, got ${rail.w}×${rail.h}`)
@@ -135,6 +151,39 @@ for (const [name, viewport] of [['portrait', PORTRAIT], ['landscape', LANDSCAPE]
   for (const [what, x] of Object.entries(right)) {
     if (x > limit) fail.push(`a ${NAV}px navigation bar would cover the ${what}: it reaches ${x}, past ${limit}`)
   }
+  await ctx.close()
+}
+
+// Turning the phone with the app open: the modes move between the bottom bar
+// and the toolbar, the timeline's frames widen for fingers and narrow again,
+// and the mode stays where it was.
+{
+  const ctx = await browser.newContext({ viewport: PORTRAIT, deviceScaleFactor: 2, isMobile: true, hasTouch: true })
+  const page = await ctx.newPage()
+  page.on('pageerror', e => errors.push(`rotate pageerror: ${e.message}`))
+  await page.goto(url, { waitUntil: 'networkidle' })
+  await page.waitForSelector('.pixel-canvas__surface', { timeout: 20000 })
+  await page.locator('.tab-bar--bottom .tab', { hasText: 'Animate' }).click()
+  await page.waitForTimeout(250)
+  const look = () => page.evaluate(() => ({
+    bottom: !!document.querySelector('.tab-bar--bottom'),
+    top: !!document.querySelector('.toolbar .tab-bar'),
+    mode: window.__editorStore.getState().ui.mode,
+    cell: Math.round(document.querySelector('.timeline__hcell')?.getBoundingClientRect().width ?? 0),
+  }))
+  const upright = await look()
+  await page.setViewportSize(LANDSCAPE)
+  await page.waitForTimeout(300)
+  const sideways = await look()
+  await page.setViewportSize(PORTRAIT)
+  await page.waitForTimeout(300)
+  const back = await look()
+  console.log(` rotate: upright ${JSON.stringify(upright)} · sideways ${JSON.stringify(sideways)} · back ${JSON.stringify(back)}`)
+  if (!upright.bottom || upright.top) fail.push('rotate: upright, the modes are not (only) in the bottom bar')
+  if (sideways.bottom || !sideways.top) fail.push('rotate: sideways, the modes did not move up into the toolbar')
+  if (!back.bottom || back.top) fail.push('rotate: turned back upright, the modes did not return to the bottom bar')
+  if ([upright, sideways, back].some(s => s.mode !== 'animate')) fail.push('rotate: turning the phone changed the mode')
+  if (!(sideways.cell > upright.cell) || back.cell !== upright.cell) fail.push(`rotate: the timeline's frames are ${upright.cell} → ${sideways.cell} → ${back.cell} wide`)
   await ctx.close()
 }
 
