@@ -5,6 +5,29 @@ anything not released yet is under **Unreleased**.
 
 ## Unreleased
 
+### Fixed
+
+- **Drawing on a variant other than the default was blind.** The canvas kept
+  showing the default variant, so a stroke on the picked one did not show,
+  neither while drawing nor after. It now shows the variant being painted; in
+  Animate, the one the animation has at that frame.
+- **A variant or visibility key changed the frames before it too**: a part
+  switched to "open hand" at frame 3 was open from frame 1. Before a part's
+  first key it now shows its default variant and is visible. Exports and the
+  3D view follow.
+- **A new variant made its part disappear** wherever it was switched on: it
+  started with no images. It now starts as a copy of the variant on the
+  canvas, and a view with no image in a variant offers to copy it from
+  another variant.
+
+### Added
+
+- **Switch a part's variant from the timeline.** With a part's row picked,
+  the timeline's bar shows its variant at the current frame; choosing another
+  keys the switch there, and the diamond beside it adds or removes that key.
+  The part's row names the variant at the playhead and marks, under the
+  frames, where a variant other than the default shows.
+
 ## 0.2.1 -- 2026-10-17
 
 ### Fixed

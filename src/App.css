@@ -418,7 +418,12 @@ input[type='text'], input:not([type]), input[inputmode] {
 .timeline__header { display: flex; height: 22px; cursor: ew-resize; touch-action: none; position: sticky; top: 0; background: var(--bg-2); z-index: 1; }
 .timeline__hcell { font-size: 10px; color: var(--fg-dim); text-align: center; line-height: 22px; border-right: 1px solid var(--border); flex: none; }
 .timeline__hcell.is-current { color: var(--accent); font-weight: 700; }
-.timeline__row { display: flex; height: 22px; }
+.timeline__row { display: flex; height: 22px; position: relative; }
+/* under a part's frames: where it shows a variant other than its default */
+.timeline__variant { position: absolute; bottom: 1px; height: 4px; border-radius: 2px; opacity: 0.85; pointer-events: none; }
+.timeline__label-variant { margin-left: auto; padding-left: 6px; font-size: 10px; color: var(--accent-2); overflow: hidden; text-overflow: ellipsis; }
+.transport__variant select { min-height: 30px; max-width: 130px; }
+.transport__variant-part { max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .timeline__cell { position: relative; height: 22px; border-right: 1px solid rgba(48,55,72,0.5); border-bottom: 1px solid rgba(48,55,72,0.5); flex: none; }
 .timeline__cell.is-current { background: rgba(255,180,84,0.08); }
 .timeline__key { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--accent); font-size: 13px; cursor: grab; touch-action: none; user-select: none; }

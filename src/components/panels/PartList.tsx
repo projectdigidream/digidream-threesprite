@@ -54,10 +54,12 @@ export default function PartList() {
   }
   const addVar = async () => {
     if (!selected) return
-    const name = await askText('New variant', { label: 'Name (e.g. “open hand”)', placeholder: 'variant', okLabel: 'Add' })
+    // a new variant starts as a copy of the one on the canvas, so switching to it never makes the part vanish
+    const from = variantId && selected.variants[variantId] ? variantId : selected.defaultVariant
+    const name = await askText('New variant', { label: `Name (e.g. “open hand”). It starts as a copy of “${selected.variants[from].name}”.`, placeholder: 'variant', okLabel: 'Add' })
     if (!name) return
     let vid: string | null = null
-    commit('Add variant', d => { vid = addVariant(d, selected.id, name).id })
+    commit('Add variant', d => { vid = addVariant(d, selected.id, name, from).id })
     if (vid) setUi({ variantId: vid })
   }
   const removeVar = async () => {

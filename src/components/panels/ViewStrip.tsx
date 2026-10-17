@@ -1,5 +1,5 @@
 import { allViews, isDerived, mirrorOf, viewAngleDeg, viewLabel } from '../../domain/views'
-import { useEditor } from '../../store/editorStore'
+import { shownVariant, useEditor } from '../../store/editorStore'
 
 /** One tab per view; derived (mirrored) views are dimmed and jump to their source when edited. */
 export default function ViewStrip() {
@@ -10,7 +10,8 @@ export default function ViewStrip() {
   const parts = useEditor(s => s.doc.parts)
   const partOrderByView = useEditor(s => s.doc.partOrderByView)
   const selectedPartId = useEditor(s => s.ui.selectedPartId)
-  const variantId = useEditor(s => s.ui.variantId)
+  // the variant the canvas shows: in Animate, the animation's at the frame
+  const variantId = useEditor(s => (s.ui.selectedPartId ? shownVariant(s, s.ui.selectedPartId) : null))
 
   const part = selectedPartId ? parts[selectedPartId] : null
   const images = part && variantId ? part.variants[variantId]?.images : null

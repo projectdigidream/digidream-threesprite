@@ -42,6 +42,21 @@ export function sampleTrack<T>(keys: readonly Key<T>[], frame: number, identity:
   return lerp(k0.value, k1.value, u)
 }
 
+/**
+ * A switch track (visibility, variant): the value of the last key at or
+ * before `frame`, and `before` until the first key. Unlike a motion track it
+ * does not reach back: a switch keyed at frame 3 leaves frames 0–2 as they
+ * were.
+ */
+export function sampleSwitch<T>(keys: readonly Key<T>[], frame: number, before: T): T {
+  let value = before
+  for (const k of keys) {
+    if (k.frame > frame) break
+    value = k.value
+  }
+  return value
+}
+
 /** Insert or replace the key at `frame`, keeping the list sorted. Returns the key. */
 export function setKey<T>(keys: Key<T>[], frame: number, value: T, interp: Interp = 'linear'): Key<T> {
   let i = 0

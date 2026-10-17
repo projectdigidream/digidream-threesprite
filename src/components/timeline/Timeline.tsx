@@ -1,7 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
-import { copyKeys, deleteRowKeys, moveRowKeys, pasteKeys, pastedRefs, rowKeyFrames, type KeyClipboard, type KeyRef } from '../../domain/animation'
+import { copyKeys, deleteRowKeys, ensurePartTrack, moveRowKeys, pasteKeys, pastedRefs, removeKey, rowKeyFrames, setKey, type KeyClipboard, type KeyRef } from '../../domain/animation'
+import { samplePart } from '../../domain/pose'
 import { addAnimation, boneOrder, removeAnimation, setFrameCount } from '../../domain/project'
-import type { Animation, Id } from '../../domain/types'
+import type { Animation, Id, Part } from '../../domain/types'
 import { askConfirm, askText } from '../../core/ui/dialogs'
 import { isTypingTarget } from '../../hooks/useKeyboardShortcuts'
 import { editorStore, useEditor } from '../../store/editorStore'
@@ -39,6 +40,28 @@ type RowKind = 'bone' | 'part'
 interface Row { kind: RowKind; id: Id; name: string; depth: number }
 
 const refId = (kind: RowKind, id: Id, frame: number) => `${kind}:${id}:${frame}`
+
+const VARIANT_COLOURS = ['#5ec8ff', '#c792ea', '#7fdb8a', '#ff8f6b', '#f0d264']
+
+/** Where a part shows a variant other than its default: one span per stretch, coloured by the variant. */
+function variantStrip(anim: Animation, part: Part | undefined): { from: number; to: number; name: string; colour: string }[] {
+  const keys = part ? anim.partTracks[part.id]?.variant : undefined
+  if (!part || !keys?.length) return []
+  const out: { from: number; to: number; name: string; colour: string }[] = []
+  keys.forEach((k, i) => {
+    const to = Math.min(i + 1 < keys.length ? keys[i + 1].frame : anim.frameCount, anim.frameCount)
+    const at = part.variantOrder.indexOf(k.value)
+    if (k.value === part.defaultVariant || at < 0 || to <= k.frame) return
+    out.push({ from: k.frame, to, name: part.variants[k.value].name, colour: VARIANT_COLOURS[at % VARIANT_COLOURS.length] })
+  })
+  return out
+}
+
+/** The variant a part with several shows at `frame`, for its row's label; nothing for a part with one. */
+function variantAt(anim: Animation, part: Part | undefined, frame: number): string | null {
+  if (!part || part.solids || part.variantOrder.length < 2) return null
+  return part.variants[samplePart(anim, part, frame).variantId]?.name ?? null
+}
 
 export default function Timeline() {
   const doc = useEditor(s => s.doc)
@@ -207,6 +230,7 @@ export default function Timeline() {
                 >
                   <Icon name={r.kind === 'bone' ? 'bone' : 'layers'} size={12} />
                   <span>{r.name}</span>
+                  {r.kind === 'part' && (() => { const v = variantAt(anim, doc.parts[r.id], ui.frame); return v && <span className="timeline__label-variant">{v}</span> })()}
                 </button>
               ))}
             </div>
@@ -221,6 +245,9 @@ export default function Timeline() {
               const keys = rowKeyFrames(anim, r.kind, r.id)
               return (
                 <div key={`${r.kind}:${r.id}`} className="timeline__row" style={{ width: anim.frameCount * cell }}>
+                  {r.kind === 'part' && variantStrip(anim, doc.parts[r.id]).map(v => (
+                    <div key={v.from} className="timeline__variant" style={{ left: v.from * cell, width: (v.to - v.from) * cell, background: v.colour }} title={v.name} />
+                  ))}
                   {Array.from({ length: anim.frameCount }, (_, f) => (
                     <div
                       key={f}
@@ -326,8 +353,45 @@ function Transport({ anim, selected, clip, multi, onToggleMulti, onCopy, onPaste
             onClick={onPaste}
           ><Icon name="paste" size={16} /></button>
           {selected > 0 && <span className="transport__hint">{selected} selected</span>}
+          <VariantKey anim={anim} />
         </>
       )}
     </div>
+  )
+}
+
+/**
+ * The selected part's variant from the current frame on, for a part with
+ * several: picking one keys the switch at this frame, and the diamond adds or
+ * removes that key. Before a part's first variant key it shows its default.
+ */
+function VariantKey({ anim }: { anim: Animation }) {
+  const doc = useEditor(s => s.doc)
+  const partId = useEditor(s => s.ui.selectedPartId)
+  const frame = useEditor(s => s.ui.frame)
+  const commit = useEditor(s => s.commit)
+  const part = partId ? doc.parts[partId] : null
+  if (!part || part.solids || part.variantOrder.length < 2) return null
+  const shown = samplePart(anim, part, frame).variantId
+  const keyed = !!anim.partTracks[part.id]?.variant.some(k => k.frame === frame)
+  const key = (v: Id) => commit('Key variant', d => { const a = d.animations[anim.id]; if (a) setKey(ensurePartTrack(a, part.id).variant, frame, v, 'step') })
+  const toggle = () => commit(keyed ? 'Delete variant key' : 'Key variant', d => {
+    const a = d.animations[anim.id]
+    if (!a) return
+    const t = ensurePartTrack(a, part.id)
+    if (!removeKey(t.variant, frame)) setKey(t.variant, frame, shown, 'step')
+  })
+  return (
+    <>
+      <span className="transport__sep" />
+      <label className="transport__field transport__variant" title={`Which variant of “${part.name}” shows from frame ${frame + 1} on; picking one keys it here`}>
+        <Icon name="layers" size={14} />
+        <span className="transport__variant-part">{part.name}</span>
+        <select className="select" value={shown} onChange={e => key(e.target.value)} aria-label={`Variant of ${part.name}`}>
+          {part.variantOrder.map(v => <option key={v} value={v}>{part.variants[v].name}</option>)}
+        </select>
+      </label>
+      <button type="button" className={`key-badge ${keyed ? 'is-keyed' : ''}`} title={keyed ? 'Delete the variant key at this frame' : 'Key this variant at this frame'} aria-label="Variant key at this frame" onClick={toggle}>◆</button>
+    </>
   )
 }

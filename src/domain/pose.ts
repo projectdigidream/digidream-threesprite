@@ -3,7 +3,7 @@
  * axis is +u (a bone with zero rotation points up). Pixel parts hang off
  * the bone's PROJECTED 2D frame in each view; solids hang off its 3D frame.
  */
-import { lerpVec3, sampleTrack, stepOnly } from './animation'
+import { lerpVec3, sampleSwitch, sampleTrack } from './animation'
 import { add3, affine, applyAffine, composeAffine, depthFactor, eulerMatrix, mul3, projectPoint, projectedAngle, scaleMatrix, type Mat34, type ViewProj } from './math3'
 import { compose, rotate, scale as scale2, translate, type Mat2D } from './transform'
 import type { Animation, Bone, Id, Part, Project, Skeleton, Vec3 } from './types'
@@ -26,8 +26,8 @@ export function samplePart(anim: Animation | null, part: Part, frame: number): P
   const t = anim?.partTracks[part.id]
   if (!t) return { visible: true, variantId: part.defaultVariant }
   return {
-    visible: sampleTrack(t.visible, frame, true, stepOnly),
-    variantId: sampleTrack(t.variant, frame, part.defaultVariant, stepOnly),
+    visible: sampleSwitch(t.visible, frame, true),
+    variantId: sampleSwitch(t.variant, frame, part.defaultVariant),
   }
 }
 

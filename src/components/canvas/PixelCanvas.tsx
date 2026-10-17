@@ -21,7 +21,7 @@ import type { Id, PartImage, Project, Vec2, Vec3 } from '../../domain/types'
 import { isDerived, mirrorOf, viewLabel } from '../../domain/views'
 import { isTypingTarget } from '../../hooks/useKeyboardShortcuts'
 import { frameCache } from '../../store/caches'
-import { editorStore, type EditorState, type Mode, useEditor } from '../../store/editorStore'
+import { editorStore, shownVariant, type EditorState, type Mode, useEditor } from '../../store/editorStore'
 import { boneFromDrag, drawRigOverlay, hitRig, type RigDrag, rigDragMove, screenDeltaToBoneLocal } from './rigOverlay'
 
 type Pt = { x: number; y: number }
@@ -55,7 +55,7 @@ function getTarget(s: EditorState, view: number, mode: Mode): Target | null {
   const partId = ui.selectedPartId
   if (!partId || !doc.parts[partId]) return null
   const part = doc.parts[partId]
-  const variantId = ui.variantId && part.variants[ui.variantId] ? ui.variantId : part.defaultVariant
+  const variantId = shownVariant(s, partId, mode === 'animate') ?? part.defaultVariant
   const derived = isDerived(doc.views.count, doc.views.mirror, view)
   const srcView = derived ? mirrorOf(doc.views.count, view) : view
   const animId = mode === 'draw' ? null : ui.animId
@@ -71,6 +71,21 @@ function newImageSize(doc: Project, partId: Id, variantId: Id): { w: number; h: 
     for (const img of Object.values(v?.images ?? {})) return { w: img.width, h: img.height }
   }
   return { w: doc.canvas.size, h: doc.canvas.size }
+}
+
+/** Another variant of the part with an image for this view (for "copy from" in a variant still empty there). */
+function variantWithView(doc: Project, partId: Id, variantId: Id, view: number): Id | null {
+  const part = doc.parts[partId]
+  if (!part) return null
+  const ids = [part.defaultVariant, ...part.variantOrder]
+  return ids.find(id => id !== variantId && part.variants[id]?.images[view]) ?? null
+}
+
+/** The variant picked for the selected part, for a canvas that shows no animation. */
+function pickedVariants(s: EditorState): Record<Id, Id> | undefined {
+  const id = s.ui.selectedPartId
+  const v = id ? shownVariant(s, id, false) : null
+  return id && v ? { [id]: v } : undefined
 }
 
 /** Nearest authored view of the same variant that has an image (for "copy from"). */
@@ -196,7 +211,7 @@ export default function PixelCanvas({ view: viewProp, embedded = false }: Props)
     const frame = showAnim ? ui.frame : 0
     const dim = curMode === 'draw' && ui.ghostOthers && ui.selectedPartId && doc.partOrder.length > 1 ? { except: ui.selectedPartId, alpha: 0.35 } : undefined
     if (!outRef.current || outRef.current.length !== n * n * 4) outRef.current = new Uint8ClampedArray(n * n * 4)
-    const pixels = composeFrame(doc, animId, frame, curView, { overrides: overridesRef.current, dim, out: outRef.current })
+    const pixels = composeFrame(doc, animId, frame, curView, { overrides: overridesRef.current, dim, out: outRef.current, variants: showAnim ? undefined : pickedVariants(s) })
 
     if (!offRef.current) offRef.current = document.createElement('canvas')
     const off = offRef.current
@@ -409,7 +424,8 @@ export default function PixelCanvas({ view: viewProp, embedded = false }: Props)
     const x = Math.floor(c.x), y = Math.floor(c.y)
     if (x < 0 || y < 0 || x >= n || y >= n) return
     const curMode = modeOf(s)
-    const full = composeFrame(doc, curMode === 'animate' ? ui.animId : null, curMode === 'animate' ? ui.frame : 0, viewOf(s))
+    const animated = curMode === 'animate'
+    const full = composeFrame(doc, animated ? ui.animId : null, animated ? ui.frame : 0, viewOf(s), { variants: animated ? undefined : pickedVariants(s) })
     const i = (y * n + x) * 4
     if (full[i + 3] === 0) return
     s.setUi({ primary: [full[i], full[i + 1], full[i + 2], full[i + 3]] })
@@ -733,12 +749,15 @@ export default function PixelCanvas({ view: viewProp, embedded = false }: Props)
   const derivedOf = target?.derived ? mirrorOf(state.doc.views.count, target.view) : null
   const missing = mode === 'draw' && target && !target.derived && !target.solids && !target.image
   const copyFrom = missing ? nearestImageView(state.doc, target.partId, target.variantId, target.srcView) : null
+  const copyVariant = missing ? variantWithView(state.doc, target.partId, target.variantId, target.srcView) : null
+  const copyVariantName = copyVariant ? state.doc.parts[target!.partId].variants[copyVariant].name : ''
 
-  const createImageForView = (from: number | null) => {
+  /** A first image for this view: blank, a copy of another view, or of this view in another variant. */
+  const createImageForView = (from: number | null, fromVariant?: Id) => {
     const s = editorStore.getState()
     const t = getTarget(s, viewOf(s), modeOf(s))
     if (!t) return
-    const src = from != null ? getPartImage(s.doc, t.partId, t.variantId, from) : undefined
+    const src = from != null ? getPartImage(s.doc, t.partId, fromVariant ?? t.variantId, from) : undefined
     const size = newImageSize(s.doc, t.partId, t.variantId)
     const img = src ? cloneImage(src) : createImage(size.w, size.h)
     s.commitPixels('Create image', t.partId, t.variantId, t.srcView, undefined, img)
@@ -777,6 +796,7 @@ export default function PixelCanvas({ view: viewProp, embedded = false }: Props)
         <div className={`pixel-canvas__banner ${embedded ? 'pixel-canvas__banner--small' : ''}`}>
           {embedded ? 'No image yet — draw to create one, or' : `This part has no image for view ${target.view}. Drawing creates one, or:`}
           <button onClick={() => createImageForView(null)}>Blank</button>
+          {copyVariant != null && <button onClick={() => createImageForView(target.srcView, copyVariant)}>Copy “{copyVariantName}”</button>}
           {copyFrom != null && <button onClick={() => createImageForView(copyFrom)}>Copy view {copyFrom}</button>}
         </div>
       )}

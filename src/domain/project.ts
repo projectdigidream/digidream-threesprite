@@ -5,7 +5,7 @@
  */
 import { clampKeys } from './animation'
 import { newId } from './ids'
-import { createImage } from './image'
+import { cloneImage, createImage } from './image'
 import { applyAffine, composeAffine, eulerFromMatrix, eulerMatrix, invertAffine, mul3, rotationOf3, type Mat34 } from './math3'
 import { createPalette, DEFAULT_PALETTE, MAX_PALETTE, PRESET_PALETTES, uniquePaletteName } from './palette'
 import { evalPose, projectBone, restProjectedAngle, viewProj } from './pose'
@@ -382,10 +382,13 @@ export function repairPartOrders(p: Project): string[] {
   return warnings
 }
 
-export function addVariant(p: Project, partId: Id, name?: string): PartVariant {
+/** A new variant of a part: empty, or a copy of the images of `copyOf` (another variant of the part). */
+export function addVariant(p: Project, partId: Id, name?: string, copyOf?: Id): PartVariant {
   const part = p.parts[partId]
   if (!part) throw new Error(`no such part ${partId}`)
   const v: PartVariant = { id: newId(), name: name?.trim() || uniqueName('variant', part.variantOrder.map(id => part.variants[id].name)), images: {} }
+  const from = copyOf ? part.variants[copyOf] : undefined
+  if (from) for (const [k, img] of Object.entries(from.images)) v.images[Number(k)] = cloneImage(img)
   part.variants[v.id] = v
   part.variantOrder.push(v.id)
   return v

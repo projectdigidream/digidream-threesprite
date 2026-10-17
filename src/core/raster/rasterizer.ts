@@ -30,6 +30,8 @@ export interface ComposeOptions {
   dim?: { except: Id | null; alpha: number }
   /** Draw only these parts. */
   only?: ReadonlySet<Id>
+  /** Show these variants of these parts, whatever the animation says (the editor shows the variant being painted). */
+  variants?: Readonly<Record<Id, Id>>
 }
 
 const SNAP_EPS = 1e-6
@@ -139,7 +141,8 @@ export function composeFrame(project: Project, animId: Id | null, frame: number,
       blitNearest(out, size, size, img, IDENTITY, alpha)
       continue
     }
-    const variantId = part.variants[s.variantId] ? s.variantId : part.defaultVariant
+    const want = opts.variants?.[partId] ?? s.variantId
+    const variantId = part.variants[want] ? want : part.defaultVariant
     const key = imageKey(partId, variantId, srcView)
     const img = opts.overrides?.get(key) ?? part.variants[variantId]?.images[srcView]
     if (!img) continue

@@ -8,6 +8,7 @@ import { useStore } from 'zustand'
 import { createStore } from 'zustand/vanilla'
 import type { Rect } from '../domain/image'
 import { activePalette } from '../domain/palette'
+import { samplePart } from '../domain/pose'
 import { createProject } from '../domain/project'
 import type { Id, PartImage, Project, RGBA, Vec2, ViewIndex } from '../domain/types'
 
@@ -253,6 +254,23 @@ export const editorStore = createStore<EditorState>()((set, get) => {
     },
   }
 })
+
+/**
+ * The variant of a part that the editor's canvases show and paint. In
+ * Animate it is the animation's at the current frame, so what is painted is
+ * what is on screen; elsewhere it is the one picked in the Parts panel for
+ * the selected part, and the default for any other.
+ */
+export function shownVariant(s: Pick<EditorState, 'doc' | 'ui'>, partId: Id, animated = s.ui.mode === 'animate'): Id | null {
+  const part = s.doc.parts[partId]
+  if (!part) return null
+  if (animated) {
+    const anim = s.ui.animId ? s.doc.animations[s.ui.animId] ?? null : null
+    return samplePart(anim, part, s.ui.frame).variantId
+  }
+  if (partId === s.ui.selectedPartId && s.ui.variantId && part.variants[s.ui.variantId]) return s.ui.variantId
+  return part.defaultVariant
+}
 
 /** React hook over the vanilla store. */
 export function useEditor<T>(selector: (s: EditorState) => T): T {
