@@ -5,6 +5,8 @@ anything not released yet is under **Unreleased**.
 
 ## Unreleased
 
+## 0.2.2 -- 2026-10-17
+
 ### Fixed
 
 - **A slow finger stroke was thrown away** on a phone: a stroke that had not
