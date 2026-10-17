@@ -257,8 +257,10 @@ expect(await page.locator('.export__format').count() > 0, 'the export panel rend
   expect(!(await sent()).includes('error'), 'no error is reported for the empty file')
   await fresh.screenshot({ path: join(outDir, 'vscode-03-new-sprite.png') })
 
-  // both chip rows hold a 16 and a 32, so each click is scoped to its own field
-  await dialog.locator('.field', { hasText: 'Canvas size' }).locator('.chip', { hasText: /^32$/ }).click()
+  // both chip rows hold a 16 and a 32, so each click is scoped to its own field;
+  // the view count sits behind "Choose the views…" (the form starts on one picture)
+  await dialog.locator('.field', { hasText: 'Size in pixels' }).locator('.chip', { hasText: /^32$/ }).click()
+  await dialog.locator('.choice-card', { hasText: 'Choose the views' }).click()
   await dialog.locator('.field', { hasText: 'rotation angles' }).locator('.chip', { hasText: /^16$/ }).click()
   await dialog.locator('button.primary', { hasText: 'Create' }).click()
   await fresh.waitForTimeout(400)
