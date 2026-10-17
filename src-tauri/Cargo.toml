@@ -1,6 +1,6 @@
 [package]
 name = "threesprite"
-version = "0.2.0"
+version = "0.2.1"
 license = "MIT"
 description = "ThreeSprite — animated multi-view sprite editor"
 edition = "2021"

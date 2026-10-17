@@ -5,6 +5,8 @@ anything not released yet is under **Unreleased**.
 
 ## Unreleased
 
+## 0.2.1 -- 2026-10-17
+
 ### Fixed
 
 - **Every new sprite exported as SPRT** unless its id was changed by hand,
