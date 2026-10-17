@@ -47,4 +47,37 @@ describe('the new-sprite form', () => {
     await act(async () => { create.click() })
     expect(editorStore.getState().doc.spriteName).toBe('Caco')
   })
+
+  const pick = (title: string) => {
+    const b = [...host!.querySelectorAll('.choice-card')].find(x => x.textContent?.includes(title)) as HTMLButtonElement
+    act(() => b.click())
+  }
+  const create = async () => {
+    const b = [...host!.querySelectorAll('button')].find(x => /create/i.test(x.textContent ?? ''))!
+    await act(async () => { b.click() })
+    return editorStore.getState().doc.views
+  }
+
+  it('starts with one picture, and asks nothing about views until asked', async () => {
+    open()
+    expect(host!.querySelector('.choice-card.is-active b')?.textContent).toBe('One picture')
+    expect(host!.textContent).not.toMatch(/Mirror symmetry/)
+    expect(await create()).toMatchObject({ count: 1 })
+  })
+
+  it('makes 8 mirrored views for "All the way round"', async () => {
+    open()
+    pick('All the way round')
+    expect(await create()).toMatchObject({ count: 8, mirror: true })
+  })
+
+  it('shows the views and mirroring for "Choose the views"', async () => {
+    open()
+    pick('Choose the views')
+    expect(host!.textContent).toMatch(/Mirror symmetry/)
+    const viewsRow = [...host!.querySelectorAll('.field')].find(f => f.textContent?.startsWith('Views'))!
+    const sixteen = [...viewsRow.querySelectorAll('.chip')].find(c => c.textContent === '16') as HTMLButtonElement
+    act(() => sixteen.click())
+    expect(await create()).toMatchObject({ count: 16, mirror: true })
+  })
 })

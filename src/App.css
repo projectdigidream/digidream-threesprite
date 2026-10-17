@@ -505,6 +505,12 @@ input[type='text'], input:not([type]), input[inputmode] {
 .app--mobile .export { grid-template-columns: 1fr; padding: 12px; }
 @media (orientation: landscape) { .app--mobile .export { grid-template-columns: 1fr 1fr; } }
 .export__col { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.choice-cards { display: flex; flex-direction: column; gap: 6px; }
+.choice-card { flex-direction: column; align-items: flex-start; justify-content: flex-start; text-align: left; gap: 2px; padding: 8px 12px; min-height: 0; }
+.choice-card span { font-size: 12px; color: var(--fg-dim); font-weight: normal; }
+.choice-card.is-active { border-color: var(--accent); background: var(--bg-4); }
+.choice-card.is-active b { color: var(--accent); }
+.choice-card.is-active span { color: var(--fg); }
 .export__hosted { margin: 0; padding: 8px 10px; border-radius: var(--radius); background: var(--bg-3); color: var(--fg-dim); font-size: 12px; }
 .export h3 { margin: 6px 0 0; font-size: 12px; color: var(--fg-dim); text-transform: uppercase; letter-spacing: 0.04em; }
 .export__formats { display: flex; flex-direction: column; gap: 6px; }
@@ -555,6 +561,8 @@ input[type='text'], input:not([type]), input[inputmode] {
     width: min(880px, 100%); padding: 14px 16px;
   }
   .app--mobile .modal--form > h2, .app--mobile .modal--form > .modal__actions { grid-column: 1 / -1; }
+  .app--mobile .choice-cards { gap: 4px; }
+  .app--mobile .choice-card { flex-direction: row; align-items: baseline; justify-content: flex-start; gap: 8px; padding: 6px 10px; }
 }
 /* The palette editor is portalled to <body>, outside `.app--mobile`: the short
    screen is what marks a phone held sideways there. */

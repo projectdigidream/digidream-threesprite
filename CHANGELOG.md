@@ -27,6 +27,11 @@ anything not released yet is under **Unreleased**.
 
 ### Changed
 
+- **New sprite starts with how it is seen**, one picture first: **One
+  picture** (the default: drawn once, the same from every side), **All the
+  way round** (8 views, 5 drawn and 3 mirrored), or **Choose the views…** for
+  the view count and mirroring as before. Any of them can be changed later in
+  Project settings.
 - **The Export tab no longer opens on an error.** It starts on Doom-style
   PNGs only for a sprite that fits them, and on Atlas + JSON otherwise; when
   a format cannot be used, the message names that format ("Can't export as
