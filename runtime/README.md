@@ -123,6 +123,10 @@ and this for tools, jams and editors that would rather not have a build step.
 what is composed, rounds the sheet height up to a power of two, and reports
 progress.
 
+A sprite with no animations yet (one just drawn) is read as a single still
+animation, `idle`: one frame at 0 fps, the drawing as it stands in every view.
+`inspectTsprite` lists it the same way, and `warnings` says so.
+
 ## Converting on the command line
 
 For engines this package cannot reach, the same conversion runs as a command

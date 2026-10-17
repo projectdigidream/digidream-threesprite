@@ -21,7 +21,23 @@
 import { buildAtlas } from '../../src/core/export/atlasBuild'
 import { collectFrames } from '../../src/core/io/exportBundle'
 import { decodeProject } from '../../src/core/io/projectFile'
+import { addAnimation } from '../../src/domain/project'
+import type { Project } from '../../src/domain/types'
 import { TSpriteSheet } from './sheet.js'
+
+/** The one still animation a sprite with no animations is read as. */
+export const STILL_ANIMATION = 'idle'
+
+/**
+ * A sprite as first drawn can have no animations yet. It is read as one still
+ * animation, `idle`, a single frame at 0 fps: the drawing as it stands, in
+ * every view. Refusing it would leave a game with no picture at all.
+ */
+function withStill(project: Project, warnings: string[]): void {
+  if (project.animationOrder.length > 0) return
+  addAnimation(project, { name: STILL_ANIMATION, fps: 0, frameCount: 1, loop: true })
+  warnings.push(`this sprite has no animations: it is read as one still "${STILL_ANIMATION}", the drawing as it stands`)
+}
 
 export interface LoadOptions {
   /** Only these animations, by name. Default: all of them. */
@@ -50,15 +66,13 @@ export interface LoadedSprite {
 /** Read a `.tsprite` and compose it into a sheet. */
 export function loadTsprite(bytes: Uint8Array, options: LoadOptions = {}): LoadedSprite {
   const { project, warnings } = decodeProject(bytes)
+  withStill(project, warnings)
 
   const wanted = options.animations
   const animIds = project.animationOrder.filter(id => !wanted || wanted.includes(project.animations[id].name))
+  // every sprite has at least the still one now, so only a request can come up empty
   if (animIds.length === 0) {
-    throw new Error(
-      wanted
-        ? `none of the requested animations are in this sprite (it has ${project.animationOrder.map(id => project.animations[id].name).join(', ') || 'none'})`
-        : 'this sprite has no animations',
-    )
+    throw new Error(`none of the requested animations are in this sprite (it has ${project.animationOrder.map(id => project.animations[id].name).join(', ')})`)
   }
 
   const collected = collectFrames(project, animIds, options.onProgress)
@@ -84,9 +98,10 @@ export function loadTsprite(bytes: Uint8Array, options: LoadOptions = {}): Loade
   }
 }
 
-/** The project's own name and the animations it holds, without composing anything. */
+/** The project's own name and the animations it holds (a sprite with none: the still `idle`), without composing anything. */
 export function inspectTsprite(bytes: Uint8Array): { name: string; sprite: string; canvas: number; views: number; animations: { name: string; fps: number; loop: boolean; frameCount: number }[] } {
   const { project } = decodeProject(bytes)
+  withStill(project, [])
   return {
     name: project.name,
     sprite: project.spriteName,

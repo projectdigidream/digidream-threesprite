@@ -5,6 +5,13 @@ anything not released yet is under **Unreleased**.
 
 ## Unreleased
 
+### Fixed
+
+- **The runtime refused a sprite with no animations** ("this sprite has no
+  animations"), so a sprite drawn but not yet animated gave a game no picture
+  at all. `loadTsprite`, `inspectTsprite` and `tsprite-atlas` now read it as
+  one still animation, `idle`: the drawing as it stands, in every view.
+
 ## 0.2.2 -- 2026-10-17
 
 ### Fixed

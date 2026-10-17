@@ -99,3 +99,30 @@ test('can round the sheet height up to a power of two', () => {
 test('refuses something that is not a project', () => {
   assert.throws(() => loadTsprite(new Uint8Array([1, 2, 3])), /Not a ThreeSprite project/)
 })
+
+/** The fixture with every animation taken out: a sprite as it is first drawn. */
+async function withoutAnimations() {
+  const { unzipSync, zipSync, strToU8, strFromU8 } = await import('fflate')
+  const files = unzipSync(new Uint8Array(bytes))
+  const project = JSON.parse(strFromU8(files['project.json']))
+  project.animations = {}
+  project.animationOrder = []
+  files['project.json'] = strToU8(JSON.stringify(project))
+  return zipSync(files)
+}
+
+test('a sprite with no animations is read as one still "idle": the drawing, every view', async () => {
+  const still = await withoutAnimations()
+  assert.deepEqual(inspectTsprite(still).animations, [{ name: 'idle', fps: 0, loop: true, frameCount: 1 }])
+  const sprite = loadTsprite(still)
+  assert.deepEqual(sprite.sheet.animationNames, ['idle'])
+  const a = sprite.sheet.animation('idle')
+  assert.equal(a.frameCount, 1)
+  assert.equal(a.fps, 0)
+  for (let v = 1; v <= sprite.sheet.viewCount; v++) {
+    const r = sprite.sheet.resolve({ animation: 'idle', time: 3, relative: (v - 1) / sprite.sheet.viewCount })
+    assert.equal(r.frame, 0, `view ${v} holds the one frame`)
+  }
+  assert.ok(sprite.warnings.some(w => /no animations/.test(w)), 'and says why there is an "idle"')
+  assert.throws(() => loadTsprite(still, { animations: ['walk'] }), /none of the requested animations.*it has idle/)
+})
