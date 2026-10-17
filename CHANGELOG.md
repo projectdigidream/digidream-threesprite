@@ -25,6 +25,14 @@ anything not released yet is under **Unreleased**.
   canvas, and a view with no image in a variant offers to copy it from
   another variant.
 
+### Changed
+
+- **The Export tab no longer opens on an error.** It starts on Doom-style
+  PNGs only for a sprite that fits them, and on Atlas + JSON otherwise; when
+  a format cannot be used, the message names that format ("Can't export as
+  Doom-style PNGs"). Inside the Studio it says first that the game needs
+  nothing from it.
+
 ### Added
 
 - **A choice of canvas background**, in the canvas's top-right corner: dark

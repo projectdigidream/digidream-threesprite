@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { planExport } from '../../core/export/plan'
 import { DEFAULT_OPTIONS, FORMAT_INFO, type ExportFormat, type ExportOptions, type ExportReport } from '../../core/export/types'
 import { ExportCancelled, runExport, type Destination } from '../../core/io/exportRun'
-import { isAndroid, isTauri } from '../../core/platform'
+import { isAndroid, isTauri, isVscode } from '../../core/platform'
 import { useEditor } from '../../store/editorStore'
 import { Icon } from '../ui/Icon'
 
@@ -10,7 +10,10 @@ const FORMATS: ExportFormat[] = ['doom', 'atlas', 'pngs', 'gif']
 
 export default function ExportPanel() {
   const doc = useEditor(s => s.doc)
-  const [format, setFormat] = useState<ExportFormat>('doom')
+  // Opens on Doom-style PNGs when the sprite fits them (a 4-character id, 1, 8
+  // or 16 views), else on the atlas, so the tab does not greet a sprite with
+  // what it cannot do.
+  const [format, setFormat] = useState<ExportFormat>(() => (planExport(doc, { format: 'doom', animIds: doc.animationOrder, options: DEFAULT_OPTIONS }).errors.length ? 'atlas' : 'doom'))
   const [animIds, setAnimIds] = useState<string[] | null>(null)
   const [options, setOptions] = useState<ExportOptions>(DEFAULT_OPTIONS)
   const [busy, setBusy] = useState<string | null>(null)
@@ -56,6 +59,12 @@ export default function ExportPanel() {
   return (
     <div className="export">
       <div className="export__col">
+        {isVscode() && (
+          <p className="export__hosted">
+            The game needs nothing from here: the studio builds this sprite into it by itself.
+            Export only to use the sprite somewhere else.
+          </p>
+        )}
         <h3>Format</h3>
         <div className="export__formats">
           {FORMATS.map(f => (
@@ -106,7 +115,7 @@ export default function ExportPanel() {
 
       <div className="export__col">
         <h3>Files</h3>
-        {plan.errors.length > 0 && <div className="warning"><b>Cannot export:</b><ul>{plan.errors.map((e, i) => <li key={i}>{e}</li>)}</ul></div>}
+        {plan.errors.length > 0 && <div className="warning"><b>Can't export as {FORMAT_INFO[format].title}:</b><ul>{plan.errors.map((e, i) => <li key={i}>{e}</li>)}</ul></div>}
         {plan.warnings.length > 0 && <div className="warning"><ul>{plan.warnings.map((w, i) => <li key={i}>{w}</li>)}</ul></div>}
         <pre className="export__files">{plan.files.slice(0, 40).map(f => f.name).join('\n')}{plan.files.length > 40 ? `\n… ${plan.files.length - 40} more` : ''}</pre>
 
