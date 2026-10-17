@@ -611,6 +611,9 @@ export default function PixelCanvas({ view: viewProp, embedded = false }: Props)
     if (g.kind === 'stroke') {
       if (!g.moved && dist({ x: e.clientX, y: e.clientY }, g.startClient) > 6) g.moved = true
       if (ip.x === g.last.x && ip.y === g.last.y) return
+      // Reaching a second pixel makes it a stroke, however slowly the finger
+      // got there: only a touch held on one pixel turns into a colour pick.
+      g.moved = true
       const color = g.tool === 'eraser' ? TRANSPARENT : s.ui.primary
       const mask = g.tool === 'dither' ? ditherMask(s.ui.ditherDensity, s.ui.ditherOffset) : undefined
       strokeSegment(g.working, g.last.x, g.last.y, ip.x, ip.y, color, s.ui.brushSize, s.ui.mirrorDraw, mask)

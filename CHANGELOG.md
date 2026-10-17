@@ -7,6 +7,11 @@ anything not released yet is under **Unreleased**.
 
 ### Fixed
 
+- **A slow finger stroke was thrown away** on a phone: a stroke that had not
+  travelled a few screen pixels within half a second was taken for a long
+  press, so it vanished and the touch turned into a colour pick. Reaching a
+  second pixel now makes it a stroke; only a finger held on one pixel picks a
+  colour.
 - **Drawing on a variant other than the default was blind.** The canvas kept
   showing the default variant, so a stroke on the picked one did not show,
   neither while drawing nor after. It now shows the variant being painted; in
