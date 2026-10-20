@@ -25,8 +25,9 @@ anything not released yet is under **Unreleased**.
   Project menu → **Texture from the module as part…** turns any texture
   painted in qPainter into a new part (its visible layers, flattened), and
   the palette editor's **Import → From the module** takes the module's
-  palette or a texture's colours. No files in between, so it works on a
-  phone too.
+  palette or a texture's colours, and **Export → To the module's palette**
+  makes the current palette the module's, the one qPainter paints from too.
+  No files in between, so it works on a phone too.
 
 ## 0.2.2 -- 2026-10-17
 

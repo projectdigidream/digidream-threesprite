@@ -8,6 +8,7 @@
  *   the host's own picker and save dialog, since a frame's file input and
  *   download link do nothing inside a phone's WebView.
  */
+import type { RGBA } from '../../domain/types'
 import { isTauri } from '../platform'
 
 /** What an embedding page offers in place of the browser's file input and download link. */
@@ -22,6 +23,8 @@ export interface HostFiles {
     texture(name: string): Promise<Uint8Array>
     /** The module's palette as JSON text, or null when it has none. */
     palette(): Promise<string | null>
+    /** Make `colors` the module's palette (the one qPainter paints from too). */
+    setPalette?(name: string, colors: RGBA[]): Promise<boolean>
   }
 }
 

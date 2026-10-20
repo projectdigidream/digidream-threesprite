@@ -222,8 +222,8 @@ export function hexToRgba(hex: string, alpha = 255): RGBA | null {
  * Read a palette from text. Understands GIMP `.gpl`, JASC `.pal`, plain hex
  * lists (Lospec `.hex`, one `rrggbb` per line, `#` optional, comments after `;`
  * or `//`), and a JSON project that carries one — a qPainter `.texproj.json`
- * through its `palette`, or this editor's own `project.json` through its active
- * palette. Duplicates are dropped; the result is capped at MAX_PALETTE.
+ * through its `palette`, this editor's own `project.json` through its active
+ * palette, or a module palette (`digidream-palette`) through its `colors`. Duplicates are dropped; the result is capped at MAX_PALETTE.
  */
 export function parsePaletteText(text: string): RGBA[] {
   const out: RGBA[] = []
@@ -286,6 +286,8 @@ function paletteFromJson(text: string): RGBA[] {
     const pick = active ?? Object.values(pals)[0]
     if (pick) return triples(pick.colors)
   }
+  // a module palette (digidream-palette): "#rrggbb" strings
+  if (Array.isArray(doc.colors)) return doc.colors.map(c => (typeof c === 'string' ? hexToRgba(c) : null)).filter((c): c is RGBA => !!c)
   return []
 }
 

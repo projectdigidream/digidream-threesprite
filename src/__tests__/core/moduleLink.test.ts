@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { importModuleTexture, textureColours, textureImage } from '../../core/io/moduleLink'
+import { importModulePalette, importModuleTexture, textureColours, textureImage } from '../../core/io/moduleLink'
 import { pngFromImage } from '../../core/io/projectFile'
 import { dialogStore, resolveCurrent } from '../../core/ui/dialogs'
 import { createImage } from '../../domain/image'
@@ -47,5 +47,15 @@ describe("the module's textures", () => {
     const part = editorStore.getState().doc.parts[id!]
     expect(part.name).toBe('BRICK')
     expect(part.variants[part.defaultVariant].images[1].width).toBe(4)
+  })
+
+  it("read the module palette (digidream-palette: #rrggbb strings)", async () => {
+    const palette = JSON.stringify({ format: 'digidream-palette', version: 1, name: 'Starter', colors: ['#000000', '#1D2B53'] })
+    w.threespriteHost = { open: async () => null, save: async () => true, library: { textures: async () => ['BRICK'], texture: async () => texproj, palette: async () => palette } }
+    const picking = importModulePalette()
+    await new Promise(r => setTimeout(r, 0))
+    expect(dialogStore.getState().queue[0]).toMatchObject({ kind: 'choice', options: ["The module's palette", 'Texture BRICK'] })
+    resolveCurrent("The module's palette")
+    expect(await picking).toEqual({ name: 'Module', colors: [[0, 0, 0, 255], [29, 43, 83, 255]] })
   })
 })

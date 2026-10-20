@@ -168,6 +168,12 @@ export default function PaletteEditor({ onClose }: Props) {
   /** `all:gpl`, `used:png`, …: which colours, then which format. */
   const doExport = async (choice: string) => {
     finishDraft()
+    if (choice === 'module') {
+      try {
+        if (await moduleLibrary()?.setPalette?.(pal.name, pal.colors)) await notice('Saved to the module', `"${pal.name}" is now the module's palette, the one qPainter paints from too.`)
+      } catch (e) { await notice('Saving to the module failed', e instanceof Error ? e.message : String(e)) }
+      return
+    }
     const [scope, format] = choice.split(':') as ['all' | 'used', PaletteFormat]
     const colors = scope === 'used' ? usedColors(doc, pal.colors) : pal.colors
     if (!colors.length) { await notice('Nothing to export', 'The sprite has no opaque pixels yet.'); return }
@@ -295,6 +301,7 @@ export default function PaletteEditor({ onClose }: Props) {
               onChange={e => { const v = e.target.value; e.target.value = ''; if (v) void doExport(v) }}
             >
               <option value="">Export…</option>
+              {moduleLibrary()?.setPalette && <option value="module">To the module's palette (qPainter's too)</option>}
               <optgroup label="Whole palette">
                 <option value="all:hex">.hex (Lospec)</option>
                 <option value="all:gpl">.gpl (GIMP, Aseprite)</option>
