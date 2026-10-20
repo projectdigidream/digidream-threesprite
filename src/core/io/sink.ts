@@ -4,8 +4,22 @@
  * - Tauri Android: the same dialogs open the Storage Access Framework and hand
  *   back content:// URIs, which plugin-fs reads and writes directly.
  * - Browser: download links and <input type=file>.
+ * - Embedded (a host page such as the studio sets `window.threespriteHost`):
+ *   the host's own picker and save dialog, since a frame's file input and
+ *   download link do nothing inside a phone's WebView.
  */
 import { isTauri } from '../platform'
+
+/** What an embedding page offers in place of the browser's file input and download link. */
+export interface HostFiles {
+  open(exts: string[], title?: string): Promise<{ name: string; bytes: Uint8Array } | null>
+  /** False when the user cancelled. */
+  save(name: string, bytes: Uint8Array): Promise<boolean>
+}
+
+export function hostFiles(): HostFiles | null {
+  return (window as unknown as { threespriteHost?: HostFiles }).threespriteHost ?? null
+}
 
 export interface FileHandle {
   /** Absolute path (desktop) or content:// URI (Android); absent in the browser. */
@@ -86,7 +100,20 @@ const browserSink: FileSink = {
   },
 }
 
+const hostSink = (host: HostFiles): FileSink => ({
+  persistentPaths: false,
+  async pickSave(defaultName) { return { name: defaultName } },
+  async write(handle, bytes) { await host.save(handle.name, bytes) },
+  async pickOpen(exts, title) {
+    const f = await host.open(exts, title)
+    return f ? { handle: { name: f.name }, bytes: f.bytes } : null
+  },
+  async read() { throw new Error('files from the host cannot be re-read without asking') },
+})
+
 export function getSink(): FileSink {
+  const host = hostFiles()
+  if (host) return hostSink(host)
   return isTauri() ? tauriSink : browserSink
 }
 

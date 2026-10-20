@@ -7,6 +7,13 @@ anything not released yet is under **Unreleased**.
 
 ### Fixed
 
+- **Inside the studio's phone app, importing and exporting did nothing**:
+  a frame's file input and download link are dead in an Android WebView. A
+  page that embeds ThreeSprite can now offer its own picker and save dialog
+  (`window.threespriteHost` with `open` and `save`). Every import, export and
+  download goes through it, and the studio uses it to import a texture or
+  the module's palette directly, without a file in between.
+
 - **The runtime refused a sprite with no animations** ("this sprite has no
   animations"), so a sprite drawn but not yet animated gave a game no picture
   at all. `loadTsprite`, `inspectTsprite` and `tsprite-atlas` now read it as
