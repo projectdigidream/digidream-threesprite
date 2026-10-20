@@ -5,24 +5,15 @@ anything not released yet is under **Unreleased**.
 
 ## Unreleased
 
-### Fixed
-
-- **A module texture bigger than the canvas could not be brought in** ("Resize
-  it first", with no way to resize it from here; the starter's are 256×256).
-  It now comes in shrunk by a whole step, every 2nd, 3rd or 4th pixel, so
-  pixel art stays crisp, and says so.
-
-## 0.2.2.1 -- 2026-10-20
+## 0.2.3 -- 2026-10-20
 
 ### Fixed
 
 - **Inside the studio's phone app, importing and exporting did nothing**:
-  a frame's file input and download link are dead in an Android WebView. A
-  page that embeds ThreeSprite can now offer its own picker and save dialog
-  (`window.threespriteHost` with `open` and `save`). Every import, export and
-  download goes through it, and the studio uses it to import a texture or
-  the module's palette directly, without a file in between.
-
+  a page in a frame cannot open a file picker or save a download inside an
+  Android WebView. ThreeSprite now opens and saves through the studio, with
+  the system's own picker and save dialog, for every import, export and
+  download.
 - **The runtime refused a sprite with no animations** ("this sprite has no
   animations"), so a sprite drawn but not yet animated gave a game no picture
   at all. `loadTsprite`, `inspectTsprite` and `tsprite-atlas` now read it as
@@ -30,13 +21,16 @@ anything not released yet is under **Unreleased**.
 
 ### Added
 
-- **Inside the studio, a module's textures and palette are one tap away**:
-  Project menu → **Texture from the module as part…** turns any texture
-  painted in qPainter into a new part (its visible layers, flattened), and
-  the palette editor's **Import → From the module** takes the module's
-  palette or a texture's colours, and **Export → To the module's palette**
-  makes the current palette the module's, the one qPainter paints from too.
-  No files in between, so it works on a phone too.
+- **Inside the studio, a module's textures and palette are one tap away**,
+  with no files in between, so it works on a phone too:
+  - Project menu → **Texture from the module as part…** turns any texture
+    painted in qPainter into a new part (its visible layers, flattened). One
+    bigger than the canvas comes in shrunk by a whole step, every 2nd, 3rd or
+    4th pixel, so pixel art stays crisp.
+  - The palette editor's **Import → From the module** takes the module's
+    palette or a texture's colours.
+  - **Export → To the module's palette** makes the current palette the
+    module's, the one qPainter paints from too.
 
 ## 0.2.2 -- 2026-10-17
 

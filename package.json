@@ -2,7 +2,7 @@
   "name": "threesprite",
   "license": "MIT",
   "private": true,
-  "version": "0.2.2",
+  "version": "0.2.3",
   "type": "module",
   "description": "Animated multi-view sprite editor for games with billboard characters (desktop, Android, browser).",
   "scripts": {
