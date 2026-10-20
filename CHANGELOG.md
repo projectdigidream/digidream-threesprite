@@ -5,6 +5,8 @@ anything not released yet is under **Unreleased**.
 
 ## Unreleased
 
+## 0.2.2.1 -- 2026-10-20
+
 ### Fixed
 
 - **Inside the studio's phone app, importing and exporting did nothing**:
