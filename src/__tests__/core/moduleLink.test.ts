@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { importModulePalette, importModuleTexture, textureColours, textureImage } from '../../core/io/moduleLink'
+import { importModulePalette, importModuleTexture, shrink, textureColours, textureImage } from '../../core/io/moduleLink'
 import { pngFromImage } from '../../core/io/projectFile'
 import { dialogStore, resolveCurrent } from '../../core/ui/dialogs'
 import { createImage } from '../../domain/image'
@@ -57,5 +57,13 @@ describe("the module's textures", () => {
     expect(dialogStore.getState().queue[0]).toMatchObject({ kind: 'choice', options: ["The module's palette", 'Texture BRICK'] })
     resolveCurrent("The module's palette")
     expect(await picking).toEqual({ name: 'Module', colors: [[0, 0, 0, 255], [29, 43, 83, 255]] })
+  })
+
+  it('shrink a texture too big for the canvas by whole steps, nearest-neighbour', () => {
+    const img = createImage(4, 4); img.pixels.set([9, 9, 9, 255], 0); img.pixels.set([7, 7, 7, 255], (2 * 4 + 2) * 4)
+    const s = shrink(img, 2)
+    expect([s.width, s.height]).toEqual([2, 2])
+    expect(Array.from(s.pixels.slice(0, 4))).toEqual([9, 9, 9, 255])
+    expect(Array.from(s.pixels.slice(12, 16))).toEqual([7, 7, 7, 255])
   })
 })

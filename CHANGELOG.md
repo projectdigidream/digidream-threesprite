@@ -5,6 +5,13 @@ anything not released yet is under **Unreleased**.
 
 ## Unreleased
 
+### Fixed
+
+- **A module texture bigger than the canvas could not be brought in** ("Resize
+  it first", with no way to resize it from here; the starter's are 256×256).
+  It now comes in shrunk by a whole step, every 2nd, 3rd or 4th pixel, so
+  pixel art stays crisp, and says so.
+
 ## 0.2.2.1 -- 2026-10-20
 
 ### Fixed

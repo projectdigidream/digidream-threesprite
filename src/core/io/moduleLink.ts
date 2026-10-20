@@ -5,7 +5,8 @@
 import { colorsFromPixels, MAX_PALETTE, parsePaletteText } from '../../domain/palette'
 import type { PartImage, RGBA } from '../../domain/types'
 import { imageFromPng } from './projectFile'
-import { askChoice } from '../ui/dialogs'
+import { editorStore } from '../../store/editorStore'
+import { askChoice, notice } from '../ui/dialogs'
 import type { ImportedPalette } from './paletteActions'
 import { addImagePart } from './projectActions'
 import { hostFiles } from './sink'
@@ -64,7 +65,19 @@ export async function importModuleTexture(): Promise<string | null> {
   if (!names.length) throw new Error('This module has no textures yet.')
   const name = await askChoice('A texture from the module, as a new part', names)
   if (!name) return null
-  return addImagePart(textureImage(await lib.texture(name)), name)
+  const img = textureImage(await lib.texture(name))
+  const n = editorStore.getState().doc.canvas.size
+  const k = Math.ceil(Math.max(img.width, img.height) / n)
+  if (k > 1) await notice(`${name} is ${img.width}×${img.height}`, `Bigger than the ${n}×${n} canvas, so it comes in at 1/${k} of its size, every ${k}th pixel.`)
+  return addImagePart(k > 1 ? shrink(img, k) : img, name)
+}
+
+/** Every `k`th pixel: nearest-neighbour, so pixel art stays crisp. */
+export function shrink(img: PartImage, k: number): PartImage {
+  const w = Math.max(1, Math.floor(img.width / k)), h = Math.max(1, Math.floor(img.height / k))
+  const out: PartImage = { width: w, height: h, pixels: new Uint8ClampedArray(w * h * 4) }
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) out.pixels.set(img.pixels.subarray(((y * k) * img.width + x * k) * 4, ((y * k) * img.width + x * k) * 4 + 4), (y * w + x) * 4)
+  return out
 }
 
 const MODULE_PALETTE = "The module's palette"
