@@ -15,6 +15,14 @@ export interface HostFiles {
   open(exts: string[], title?: string): Promise<{ name: string; bytes: Uint8Array } | null>
   /** False when the user cancelled. */
   save(name: string, bytes: Uint8Array): Promise<boolean>
+  /** The module the sprite belongs to, when the host has one: its textures and its palette, with no files in between. */
+  library?: {
+    textures(): Promise<string[]>
+    /** A texture's bytes: a PNG, or a qPainter `.texproj.json`. */
+    texture(name: string): Promise<Uint8Array>
+    /** The module's palette as JSON text, or null when it has none. */
+    palette(): Promise<string | null>
+  }
 }
 
 export function hostFiles(): HostFiles | null {

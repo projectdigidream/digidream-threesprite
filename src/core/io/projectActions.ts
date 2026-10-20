@@ -3,7 +3,7 @@
  * the file sink. UI components call these; nothing here renders.
  */
 import { addPart } from '../../domain/project'
-import type { Project } from '../../domain/types'
+import type { PartImage, Project } from '../../domain/types'
 import { autosaveStore, savesItself } from '../../store/autosave'
 import { editorStore, type EditorState } from '../../store/editorStore'
 import { askConfirm } from '../ui/dialogs'
@@ -199,15 +199,19 @@ export async function removeFromLibrary(id: string): Promise<void> {
 export async function importPngAsPart(): Promise<string | null> {
   const picked = await getSink().pickOpen(['png'], 'Import PNG as a part')
   if (!picked) return null
-  const img = imageFromPng(picked.bytes)
+  return addImagePart(imageFromPng(picked.bytes), picked.handle.name.replace(/\.png$/i, ''))
+}
+
+/** A new part on the selected bone (view 1) whose image is `img`. */
+export function addImagePart(img: PartImage, name: string): string | null {
   const s = editorStore.getState()
   const n = s.doc.canvas.size
   if (img.width > n || img.height > n) throw new Error(`The image is ${img.width}×${img.height} but the canvas is ${n}×${n}. Resize it first.`)
   const boneId = s.ui.selectedBoneId ?? s.doc.skeleton.rootOrder[0]
   if (!boneId) throw new Error('The rig has no bone to attach the image to.')
   let id: string | null = null
-  s.commit('Import PNG', d => {
-    id = addPart(d, { boneId, name: picked.handle.name.replace(/\.png$/i, ''), image: img, pivot: { x: Math.floor(img.width / 2), y: img.height } }).id
+  s.commit('Import image', d => {
+    id = addPart(d, { boneId, name, image: img, pivot: { x: Math.floor(img.width / 2), y: img.height } }).id
   })
   if (id) s.selectPart(id)
   return id

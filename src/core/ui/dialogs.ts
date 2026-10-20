@@ -10,6 +10,7 @@ export type DialogRequest =
   | { kind: 'prompt'; title: string; label?: string; defaultValue: string; placeholder?: string; okLabel: string; resolve: (v: string | null) => void }
   | { kind: 'confirm'; title: string; message?: string; okLabel: string; danger: boolean; resolve: (v: boolean) => void }
   | { kind: 'notice'; title: string; message?: string; resolve: () => void }
+  | { kind: 'choice'; title: string; message?: string; options: string[]; resolve: (v: string | null) => void }
 
 export const dialogStore = createStore<{ queue: DialogRequest[] }>(() => ({ queue: [] }))
 
@@ -32,6 +33,11 @@ export function notice(title: string, message?: string): Promise<void> {
   return new Promise(resolve => enqueue({ kind: 'notice', title, message, resolve }))
 }
 
+/** Pick one of `options`. Resolves with it, or null when cancelled. */
+export function askChoice(title: string, options: string[], message?: string): Promise<string | null> {
+  return new Promise(resolve => enqueue({ kind: 'choice', title, message, options, resolve }))
+}
+
 /** Answer the dialog at the head of the queue (called by the host). */
 export function resolveCurrent(value: unknown): void {
   const cur = dialogStore.getState().queue[0]
@@ -39,5 +45,6 @@ export function resolveCurrent(value: unknown): void {
   dialogStore.setState(s => ({ queue: s.queue.slice(1) }))
   if (cur.kind === 'prompt') cur.resolve(typeof value === 'string' ? value.trim() : null)
   else if (cur.kind === 'confirm') cur.resolve(value === true)
+  else if (cur.kind === 'choice') cur.resolve(typeof value === 'string' ? value : null)
   else cur.resolve()
 }

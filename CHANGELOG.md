@@ -19,6 +19,15 @@ anything not released yet is under **Unreleased**.
   at all. `loadTsprite`, `inspectTsprite` and `tsprite-atlas` now read it as
   one still animation, `idle`: the drawing as it stands, in every view.
 
+### Added
+
+- **Inside the studio, a module's textures and palette are one tap away**:
+  Project menu → **Texture from the module as part…** turns any texture
+  painted in qPainter into a new part (its visible layers, flattened), and
+  the palette editor's **Import → From the module** takes the module's
+  palette or a texture's colours. No files in between, so it works on a
+  phone too.
+
 ## 0.2.2 -- 2026-10-17
 
 ### Fixed

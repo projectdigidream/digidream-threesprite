@@ -20,15 +20,15 @@ export default function DialogHost() {
       if (e.key !== 'Escape') return
       e.stopPropagation()
       e.preventDefault()
-      resolveCurrent(req.kind === 'prompt' ? null : req.kind === 'confirm' ? false : undefined)
+      resolveCurrent(req.kind === 'prompt' || req.kind === 'choice' ? null : req.kind === 'confirm' ? false : undefined)
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
   }, [req])
 
   if (!req) return null
-  const ok = () => resolveCurrent(req.kind === 'prompt' ? text : req.kind === 'confirm' ? true : undefined)
-  const cancel = () => resolveCurrent(req.kind === 'prompt' ? null : req.kind === 'confirm' ? false : undefined)
+  const ok = () => resolveCurrent(req.kind === 'prompt' ? text : req.kind === 'confirm' ? true : req.kind === 'choice' ? null : undefined)
+  const cancel = () => resolveCurrent(req.kind === 'prompt' || req.kind === 'choice' ? null : req.kind === 'confirm' ? false : undefined)
 
   return (
     <div className="modal-backdrop modal-backdrop--top" onClick={cancel}>
@@ -51,11 +51,18 @@ export default function DialogHost() {
             <input ref={inputRef} value={text} placeholder={req.placeholder} onChange={e => setText(e.target.value)} />
           </label>
         )}
+        {req.kind === 'choice' && (
+          <div className="choice-cards" role="listbox" aria-label={req.title}>
+            {req.options.map(o => <button key={o} role="option" className="choice-card" onClick={() => resolveCurrent(o)}><b>{o}</b></button>)}
+          </div>
+        )}
         <div className="modal__actions">
           {req.kind !== 'notice' && <button onClick={cancel}>Cancel</button>}
-          <button className={req.kind === 'confirm' && req.danger ? 'danger' : 'primary'} onClick={ok} autoFocus={req.kind !== 'prompt'}>
-            {req.kind === 'notice' ? 'Close' : req.okLabel}
-          </button>
+          {req.kind !== 'choice' && (
+            <button className={req.kind === 'confirm' && req.danger ? 'danger' : 'primary'} onClick={ok} autoFocus={req.kind !== 'prompt'}>
+              {req.kind === 'notice' ? 'Close' : req.okLabel}
+            </button>
+          )}
         </div>
       </div>
     </div>

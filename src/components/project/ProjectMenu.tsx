@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { getLibrary, type RecentEntry } from '../../core/io/library'
 import { autosaveNow, importPngAsPart, leaveCurrent, openProjectFromDisk, openRecent, removeFromLibrary, saveProject, saveProjectAs } from '../../core/io/projectActions'
+import { importModuleTexture, moduleLibrary } from '../../core/io/moduleLink'
 import { isAndroid, isTauri, isVscode } from '../../core/platform'
 import { isTypingTarget } from '../../hooks/useKeyboardShortcuts'
 import { askConfirm } from '../../core/ui/dialogs'
@@ -53,6 +54,7 @@ export default function ProjectMenu({ onNew, onClose, notify }: Props) {
         <button className="menu__item" onClick={() => run(saveProject, hosted ? undefined : 'Saved')}><Icon name="save" size={16} /> Save <kbd>Ctrl S</kbd></button>
         {!hosted && <button className="menu__item" onClick={() => run(saveProjectAs, 'Saved')}><Icon name="export" size={16} /> {tauri ? 'Save as…' : 'Download project…'}</button>}
         <button className="menu__item" onClick={() => run(importPngAsPart, 'Imported as a new part')}><Icon name="layers" size={16} /> Import PNG as part…</button>
+        {moduleLibrary() && <button className="menu__item" onClick={() => run(importModuleTexture, 'Added as a new part')}><Icon name="layers" size={16} /> Texture from the module as part…</button>}
         <div className="menu__meta">{hosted ? (source.path ?? 'Open in VS Code') : source.path ? source.path : 'Stored in the app library, saved automatically'}</div>
         {!hosted && failed && <div className="menu__meta menu__meta--error">Autosave failed: {failed}</div>}
         {linkable && (

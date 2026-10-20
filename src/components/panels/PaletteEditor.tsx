@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { importModulePalette, moduleLibrary } from '../../core/io/moduleLink'
 import { exportPaletteFile, importPaletteFile, type PaletteFormat } from '../../core/io/paletteActions'
 import { askConfirm, askText, notice } from '../../core/ui/dialogs'
 import {
@@ -147,12 +148,12 @@ export default function PaletteEditor({ onClose }: Props) {
     if (ok) { commit('Delete palette', d => { removePalette(d, pal.id) }); setSel(0) }
   }
   /** `replace` lands the file as a new palette; `add` appends what this one is missing. */
-  const doImport = async (mode: 'replace' | 'add') => {
+  const doImport = async (mode: 'replace' | 'add' | 'module') => {
     finishDraft()
     try {
-      const r = await importPaletteFile()
+      const r = mode === 'module' ? await importModulePalette() : await importPaletteFile()
       if (!r) return
-      if (mode === 'replace') {
+      if (mode !== 'add') {
         commit('Import palette', d => { const p = addPalette(d, r.name, r.colors); d.activePaletteId = p.id })
         setSel(0)
       } else {
@@ -279,11 +280,12 @@ export default function PaletteEditor({ onClose }: Props) {
             <select
               className="select" value="" aria-label="Import palette"
               title="Read colours from a palette file (.hex, .gpl, .pal), an image, or a project that holds a palette"
-              onChange={e => { const v = e.target.value; e.target.value = ''; if (v) void doImport(v as 'replace' | 'add') }}
+              onChange={e => { const v = e.target.value; e.target.value = ''; if (v) void doImport(v as 'replace' | 'add' | 'module') }}
             >
               <option value="">Import…</option>
               <option value="replace">Replace: as a new palette…</option>
               <option value="add">Add to “{pal.name}”…</option>
+              {moduleLibrary() && <option value="module">From the module: as a new palette…</option>}
             </select>
             <span className="spacer" />
             <Icon name="export" size={14} />
