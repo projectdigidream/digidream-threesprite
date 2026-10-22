@@ -9,7 +9,7 @@ import { zipSync } from 'fflate'
 import type { Project } from '../../domain/types'
 import { buildAtlas } from '../export/atlasBuild'
 import { delayForFps, encodeGif } from '../export/gifBuild'
-import { planExport, slug } from '../export/plan'
+import { planExport, scopedProject, slug } from '../export/plan'
 import type { ExportReport, ExportSelection, SinkSpec } from '../export/types'
 import { isTauri } from '../platform'
 import { downloadBytes } from './browserDownload'
@@ -22,7 +22,8 @@ export class ExportCancelled extends Error {
   constructor() { super('cancelled') }
 }
 
-export async function runExport(project: Project, sel: ExportSelection, dest: Destination, onProgress?: (done: number, total: number) => void): Promise<ExportReport> {
+export async function runExport(whole: Project, sel: ExportSelection, dest: Destination, onProgress?: (done: number, total: number) => void): Promise<ExportReport> {
+  const project = scopedProject(whole, sel)
   const plan = planExport(project, sel)
   if (plan.errors.length) throw new Error(plan.errors.join('\n'))
   if (!isTauri()) return runInBrowser(project, sel, onProgress)

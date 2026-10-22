@@ -38,6 +38,10 @@ export interface ExportSelection {
   format: ExportFormat
   animIds: Id[]
   options: ExportOptions
+  /** Only these parts (a layer of a paper doll, say), every animation as it is. Default: all of them. */
+  parts?: Id[]
+  /** The id the files are named after, in place of the sprite's own (so two layers' files do not collide). */
+  spriteName?: string
 }
 
 export type SinkSpec = { kind: 'dir'; path: string } | { kind: 'zip'; path?: string; contentUri?: string }

@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { planExport } from '../../core/export/plan'
+import { planExport, scopedProject } from '../../core/export/plan'
+import { normalizeSpriteName } from '../../domain/project'
 import { DEFAULT_OPTIONS, FORMAT_INFO, type ExportFormat, type ExportOptions, type ExportReport } from '../../core/export/types'
 import { ExportCancelled, runExport, type Destination } from '../../core/io/exportRun'
 import { isAndroid, isTauri, isVscode } from '../../core/platform'
@@ -15,14 +16,23 @@ export default function ExportPanel() {
   // what it cannot do.
   const [format, setFormat] = useState<ExportFormat>(() => (planExport(doc, { format: 'doom', animIds: doc.animationOrder, options: DEFAULT_OPTIONS }).errors.length ? 'atlas' : 'doom'))
   const [animIds, setAnimIds] = useState<string[] | null>(null)
+  // only some parts: a layer exported on its own, every animation kept, under an id of its own
+  const [partIds, setPartIds] = useState<string[] | null>(null)
+  const [layerName, setLayerName] = useState('')
   const [options, setOptions] = useState<ExportOptions>(DEFAULT_OPTIONS)
   const [busy, setBusy] = useState<string | null>(null)
   const [report, setReport] = useState<ExportReport | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const selected = animIds ?? doc.animationOrder
-  const sel = useMemo(() => ({ format, animIds: selected, options }), [format, selected, options])
-  const plan = useMemo(() => planExport(doc, sel), [doc, sel])
+  const parts = (partIds ?? doc.partOrder).filter(id => doc.parts[id])
+  const subset = parts.length < doc.partOrder.length
+  const sel = useMemo(() => ({ format, animIds: selected, options, ...(subset ? { parts, spriteName: layerName || undefined } : {}) }), [format, selected, options, subset, parts.join(), layerName])
+  const plan = useMemo(() => planExport(scopedProject(doc, sel), sel), [doc, sel])
+  const togglePart = (id: string) => setPartIds(cur => {
+    const list = cur ?? doc.partOrder
+    return list.includes(id) ? list.filter(x => x !== id) : doc.partOrder.filter(x => list.includes(x) || x === id)
+  })
   const tauri = isTauri()
   const android = isAndroid()
   const browserOk = FORMAT_INFO[format].browser
@@ -88,6 +98,23 @@ export default function ExportPanel() {
             )
           })}
         </div>
+
+        <h3>Parts</h3>
+        <div className="export__anims">
+          {[...doc.partOrder].reverse().map(id => (
+            <label key={id} className="field--row">
+              <input type="checkbox" checked={parts.includes(id)} onChange={() => togglePart(id)} />
+              <span>{doc.parts[id].name}</span>
+            </label>
+          ))}
+        </div>
+        {subset && (
+          <label className="field">
+            <span>Sprite id for these files</span>
+            <input value={layerName} placeholder={doc.spriteName} onChange={e => setLayerName(e.target.value)} onBlur={() => layerName && setLayerName(normalizeSpriteName(layerName))} aria-label="Sprite id for these files" />
+            <small>Only the ticked parts, with every animation. A name of their own keeps these files from replacing the whole sprite's.</small>
+          </label>
+        )}
 
         <h3>Options</h3>
         <div className="export__options">

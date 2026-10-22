@@ -5,6 +5,14 @@ anything not released yet is under **Unreleased**.
 
 ## Unreleased
 
+### Added
+
+- **Export some parts on their own**, every animation kept: the Export tab's
+  new **Parts** list exports only the ticked ones, a sword or a hat as a layer
+  of its own, for games that draw characters in layers. Give them a sprite
+  id of their own, and their files sit beside the whole sprite's instead of
+  replacing them.
+
 ## 0.2.3 -- 2026-10-20
 
 ### Fixed

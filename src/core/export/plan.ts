@@ -3,7 +3,7 @@
  * the panel can show file names and refuse impossible exports up front. The
  * naming rules mirror the Rust side exactly (src-tauri/src/commands.rs).
  */
-import { DOOM_SPRITE_NAME_RE, type Project } from '../../domain/types'
+import { DOOM_SPRITE_NAME_RE, type Id, type Project } from '../../domain/types'
 import type { ExportSelection } from './types'
 
 export interface PlannedFile {
@@ -40,10 +40,24 @@ export function doomFrameLetter(i: number): string {
   return String.fromCharCode(65 + i)
 }
 
+/** The project as one export sees it: only the selected parts, under the id the files take. */
+export function scopedProject(project: Project, sel: ExportSelection): Project {
+  if (!sel.parts && !sel.spriteName) return project
+  const keep = sel.parts ? new Set(sel.parts) : null
+  const only = (ids: Id[]) => (keep ? ids.filter(id => keep.has(id)) : ids)
+  return {
+    ...project,
+    spriteName: sel.spriteName || project.spriteName,
+    partOrder: only(project.partOrder),
+    partOrderByView: Object.fromEntries(Object.entries(project.partOrderByView).map(([v, ids]) => [v, only(ids ?? [])])),
+  }
+}
+
 export function planExport(project: Project, sel: ExportSelection): ExportPlan {
   const N = project.views.count
   const anims = project.animationOrder.filter(id => sel.animIds.includes(id)).map(id => project.animations[id])
   const errors: string[] = []
+  if (sel.parts && sel.parts.length === 0) errors.push('No parts are ticked: tick the ones to export.')
   const warnings: string[] = []
   const files: PlannedFile[] = []
   const totalFrames = anims.reduce((a, x) => a + x.frameCount, 0)
