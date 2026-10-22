@@ -5,6 +5,8 @@ anything not released yet is under **Unreleased**.
 
 ## Unreleased
 
+## 0.2.3.1 -- 2026-10-22
+
 ### Added
 
 - **Export some parts on their own**, every animation kept: the Export tab's
