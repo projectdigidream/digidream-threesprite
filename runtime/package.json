@@ -1,6 +1,6 @@
 {
   "name": "@threesprite/runtime",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Play ThreeSprite multi-view sprites in any engine: pick the rotation from the camera direction and the frame from the clock.",
   "license": "MIT",
   "type": "module",
