@@ -5,6 +5,8 @@ anything not released yet is under **Unreleased**.
 
 ## Unreleased
 
+## 0.2.4.1 -- 2026-11-01
+
 ### Added
 
 - **Copy, cut and paste** the selection (the whole image when nothing is
