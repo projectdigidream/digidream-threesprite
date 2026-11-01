@@ -12,9 +12,10 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { composeFrame, imageKey, partCanvasMatrix } from '../../core/raster/rasterizer'
 import { fillAt, strokeSegment } from '../../core/tools/brush'
 import { ditherMask } from '../../core/tools/dither'
+import { clipStore, floatingOver, floatMoved } from '../../core/tools/clipboard'
 import { centeredPan, clampZoom, fitZoom, nextZoom, snapZoom, zoomAbout } from '../../core/tools/zoom'
 import { blitCopy, clearRect, cloneImage, createImage, cropImage, TRANSPARENT, type Rect } from '../../domain/image'
-import { addBone, getPartImage } from '../../domain/project'
+import { addBone, getPartImage, imageSourcesFor, newImageSize } from '../../domain/project'
 import { updatePrimitive } from '../../domain/solidsOps'
 import { apply, invert, type Mat2D } from '../../domain/transform'
 import type { Id, PartImage, Project, Vec2, Vec3 } from '../../domain/types'
@@ -32,7 +33,7 @@ type Gesture =
   | { kind: 'idle' }
   | { kind: 'stroke'; pointerId: number; tool: 'pencil' | 'eraser' | 'dither'; key: string; partId: Id; variantId: Id; view: number; before: PartImage | undefined; working: PartImage; last: Pt; startClient: Pt; startedAt: number; moved: boolean; timer: number }
   | { kind: 'select'; pointerId: number; start: Pt; partId: Id }
-  | { kind: 'move'; pointerId: number; key: string; partId: Id; variantId: Id; view: number; before: PartImage; base: PartImage; float: PartImage; rect: Rect; start: Pt; delta: Pt }
+  | { kind: 'move'; pointerId: number; key: string; partId: Id; variantId: Id; view: number; before: PartImage; base: PartImage; float: PartImage; rect: Rect; start: Pt; delta: Pt; floating: boolean }
   | { kind: 'pan'; pointerId: number; startClient: Pt; startPan: Pt }
   | { kind: 'pinch'; a: number; b: number; startDist: number; startZoom: number; startMid: Pt; startPan: Pt }
   | { kind: 'rig'; pointerId: number; drag: RigDrag }
@@ -65,23 +66,6 @@ function getTarget(s: EditorState, view: number, mode: Mode): Target | null {
   return { partId, variantId, view, srcView, derived, solids: !!part.solids, image: getPartImage(doc, partId, variantId, srcView), m: partCanvasMatrix(doc, animId, frame, partId, srcView), animId, frame }
 }
 
-/** Size for a new image of a part: match its existing images, else the canvas. */
-function newImageSize(doc: Project, partId: Id, variantId: Id): { w: number; h: number } {
-  const part = doc.parts[partId]
-  const candidates = [part.variants[variantId], ...part.variantOrder.map(id => part.variants[id])]
-  for (const v of candidates) {
-    for (const img of Object.values(v?.images ?? {})) return { w: img.width, h: img.height }
-  }
-  return { w: doc.canvas.size, h: doc.canvas.size }
-}
-
-/** Another variant of the part with an image for this view (for "copy from" in a variant still empty there). */
-function variantWithView(doc: Project, partId: Id, variantId: Id, view: number): Id | null {
-  const part = doc.parts[partId]
-  if (!part) return null
-  const ids = [part.defaultVariant, ...part.variantOrder]
-  return ids.find(id => id !== variantId && part.variants[id]?.images[view]) ?? null
-}
 
 /** The variant picked for the selected part, for a canvas that shows no animation. */
 function pickedVariants(s: EditorState): Record<Id, Id> | undefined {
@@ -90,18 +74,15 @@ function pickedVariants(s: EditorState): Record<Id, Id> | undefined {
   return id && v ? { [id]: v } : undefined
 }
 
-/** Nearest authored view of the same variant that has an image (for "copy from"). */
-function nearestImageView(doc: Project, partId: Id, variantId: Id, view: number): number | null {
-  const v = doc.parts[partId]?.variants[variantId]
-  if (!v) return null
-  const N = doc.views.count
-  let best: number | null = null
-  let bestD = Infinity
-  for (const k of Object.keys(v.images).map(Number)) {
-    const d = Math.min(Math.abs(k - view), N - Math.abs(k - view))
-    if (d < bestD) { bestD = d; best = k }
-  }
-  return best
+/** An image a view still empty could start from, named for the banner. */
+interface CopySource { variantId: Id; view: number; label: string }
+
+function copySourcesNamed(doc: Project, partId: Id, variantId: Id, view: number, short: boolean): CopySource[] {
+  const part = doc.parts[partId]
+  return imageSourcesFor(doc, partId, variantId, view).map(c => ({
+    ...c,
+    label: c.variantId !== variantId ? `“${part.variants[c.variantId].name}”` : short ? `view ${c.view}` : `view ${c.view} · ${viewLabel(doc.views.count, c.view)}`,
+  }))
 }
 
 function dist(a: Pt, b: Pt): number { return Math.hypot(a.x - b.x, a.y - b.y) }
@@ -145,6 +126,14 @@ export default function PixelCanvas({ view: viewProp, embedded = false }: Props)
     hintTimer.current = window.setTimeout(() => setHint(null), 2600)
   }, [])
   useEffect(() => () => window.clearTimeout(hintTimer.current), [])
+  // what copy and paste have to say shows on the canvas being painted
+  useEffect(() => clipStore.subscribe((c, prev) => {
+    if (!c.note || c.note === prev.note) return
+    if (embedded && viewProp !== editorStore.getState().ui.view) return
+    flashHint(c.note.text)
+  }), [embedded, viewProp, flashHint])
+  /** The image an empty view is to be copied from, as `variant:view`; unset, the nearest. */
+  const [copyPick, setCopyPick] = useState('')
 
   const storeMode = useEditor(s => s.ui.mode)
   const tool = useEditor(s => s.ui.tool)
@@ -389,7 +378,7 @@ export default function PixelCanvas({ view: viewProp, embedded = false }: Props)
       const final = cloneImage(g.base)
       blitCopy(final, g.float, g.rect.x + g.delta.x, g.rect.y + g.delta.y)
       editorStore.getState().commitPixels('Move', g.partId, g.variantId, g.view, g.before, final)
-      editorStore.getState().setUi({ selection: { ...g.rect, x: g.rect.x + g.delta.x, y: g.rect.y + g.delta.y } })
+      editorStore.getState().setUi({ selection: g.floating ? floatMoved(g.delta) : { ...g.rect, x: g.rect.x + g.delta.x, y: g.rect.y + g.delta.y } })
     }
     gestureRef.current = { kind: 'idle' }
     schedule()
@@ -563,12 +552,14 @@ export default function PixelCanvas({ view: viewProp, embedded = false }: Props)
       const rect = ui.selection ?? { x: 0, y: 0, w: t.image.width, h: t.image.height }
       const inside = ip.x >= rect.x && ip.y >= rect.y && ip.x < rect.x + rect.w && ip.y < rect.y + rect.h
       if (!inside && ui.selection) { s.setUi({ selection: null }); return }
-      const base = cloneImage(t.image)
-      const float = cropImage(t.image, rect)
-      clearRect(base, rect)
+      // a paste that still floats is lifted off what it covered, whole
+      const lifted = floatingOver(t.partId, t.variantId, t.srcView, t.image, ui.selection)
+      const base = lifted?.base ?? cloneImage(t.image)
+      const float = lifted?.float ?? cropImage(t.image, rect)
+      if (!lifted) clearRect(base, rect)
       const key = imageKey(t.partId, t.variantId, t.srcView)
       overridesRef.current.set(key, cloneImage(t.image))
-      gestureRef.current = { kind: 'move', pointerId: e.pointerId, key, partId: t.partId, variantId: t.variantId, view: t.srcView, before: t.image, base, float, rect, start: ip, delta: { x: 0, y: 0 } }
+      gestureRef.current = { kind: 'move', pointerId: e.pointerId, key, partId: t.partId, variantId: t.variantId, view: t.srcView, before: t.image, base, float, rect: lifted?.rect ?? rect, start: ip, delta: { x: 0, y: 0 }, floating: !!lifted }
       return
     }
   }
@@ -715,7 +706,7 @@ export default function PixelCanvas({ view: viewProp, embedded = false }: Props)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // canvas-local keys: zoom, fit, space-pan, delete selection, escape (main canvas only)
+  // canvas-local keys: zoom, fit, space-pan, escape (main canvas only)
   useEffect(() => {
     if (embedded) return
     const onDown = (e: KeyboardEvent) => {
@@ -732,14 +723,6 @@ export default function PixelCanvas({ view: viewProp, embedded = false }: Props)
       else if (e.key === '-') zoomStep(-1)
       else if (e.key === '0') fitView()
       else if (e.key === 'Escape') { s.setUi({ selection: null, rigTool: 'select' }); if (gestureRef.current.kind === 'stroke') endStroke(false) }
-      else if ((e.key === 'Delete' || e.key === 'Backspace') && s.ui.selection && s.ui.mode === 'draw') {
-        const t = getTarget(s, s.ui.view, 'draw')
-        if (t?.image && !t.derived) {
-          const working = cloneImage(t.image)
-          clearRect(working, s.ui.selection)
-          s.commitPixels('Clear selection', t.partId, t.variantId, t.srcView, t.image, working)
-        }
-      }
     }
     const onUp = (e: KeyboardEvent) => { if (e.key === ' ') spaceRef.current = false }
     window.addEventListener('keydown', onDown)
@@ -762,16 +745,15 @@ export default function PixelCanvas({ view: viewProp, embedded = false }: Props)
   void revision; void selectedPartId; void variantId; void docViews
   const derivedOf = target?.derived ? mirrorOf(state.doc.views.count, target.view) : null
   const missing = mode === 'draw' && target && !target.derived && !target.solids && !target.image
-  const copyFrom = missing ? nearestImageView(state.doc, target.partId, target.variantId, target.srcView) : null
-  const copyVariant = missing ? variantWithView(state.doc, target.partId, target.variantId, target.srcView) : null
-  const copyVariantName = copyVariant ? state.doc.parts[target!.partId].variants[copyVariant].name : ''
+  const sources = missing ? copySourcesNamed(state.doc, target.partId, target.variantId, target.srcView, embedded) : []
+  const source = sources.find(c => `${c.variantId}:${c.view}` === copyPick) ?? sources[0]
 
-  /** A first image for this view: blank, a copy of another view, or of this view in another variant. */
-  const createImageForView = (from: number | null, fromVariant?: Id) => {
+  /** A first image for this view: blank, or a copy of another view or of this view in another variant. */
+  const createImageForView = (from: CopySource | null) => {
     const s = editorStore.getState()
     const t = getTarget(s, viewOf(s), modeOf(s))
     if (!t) return
-    const src = from != null ? getPartImage(s.doc, t.partId, fromVariant ?? t.variantId, from) : undefined
+    const src = from ? getPartImage(s.doc, t.partId, from.variantId, from.view) : undefined
     const size = newImageSize(s.doc, t.partId, t.variantId)
     const img = src ? cloneImage(src) : createImage(size.w, size.h)
     s.commitPixels('Create image', t.partId, t.variantId, t.srcView, undefined, img)
@@ -810,8 +792,16 @@ export default function PixelCanvas({ view: viewProp, embedded = false }: Props)
         <div className={`pixel-canvas__banner ${embedded ? 'pixel-canvas__banner--small' : ''}`}>
           {embedded ? 'No image yet — draw to create one, or' : `This part has no image for view ${target.view}. Drawing creates one, or:`}
           <button onClick={() => createImageForView(null)}>Blank</button>
-          {copyVariant != null && <button onClick={() => createImageForView(target.srcView, copyVariant)}>Copy “{copyVariantName}”</button>}
-          {copyFrom != null && <button onClick={() => createImageForView(copyFrom)}>Copy view {copyFrom}</button>}
+          {source && (
+            <span className="pixel-canvas__copy">
+              <button onClick={() => createImageForView(source)}>{sources.length > 1 ? 'Copy' : `Copy ${source.label}`}</button>
+              {sources.length > 1 && (
+                <select className="select pixel-canvas__copy-from" value={`${source.variantId}:${source.view}`} onChange={e => setCopyPick(e.target.value)} aria-label="Copy from" title="The image to copy">
+                  {sources.map(c => <option key={`${c.variantId}:${c.view}`} value={`${c.variantId}:${c.view}`}>{c.label}</option>)}
+                </select>
+              )}
+            </span>
+          )}
         </div>
       )}
       {hint && <div className="pixel-canvas__banner pixel-canvas__banner--small pixel-canvas__banner--hint">{hint}</div>}

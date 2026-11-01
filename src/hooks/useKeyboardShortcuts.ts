@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { clearSelection, copySelection, pasteClip, selectAll } from '../core/tools/clipboard'
 import { editorStore, type ToolId } from '../store/editorStore'
 
 const TOOL_KEYS: Record<string, ToolId> = { b: 'pencil', e: 'eraser', d: 'dither', g: 'fill', i: 'eyedropper', m: 'select', v: 'move', h: 'hand' }
@@ -10,7 +11,7 @@ export function isTypingTarget(t: EventTarget | null): boolean {
   return tag === 'input' || tag === 'textarea' || tag === 'select' || el.isContentEditable
 }
 
-/** Global editor shortcuts (desktop). Canvas-local keys (zoom, delete selection) live in the canvas. */
+/** Global editor shortcuts (desktop). Canvas-local keys (zoom, escape) live in the canvas. */
 export function useKeyboardShortcuts(): void {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -25,7 +26,17 @@ export function useKeyboardShortcuts(): void {
         return
       }
       if (mod && k === 'y') { e.preventDefault(); s.redo(); return }
+      // pixels, where they are painted (Animate's Ctrl+C / V copy keys: the timeline has them)
+      const painting = s.ui.mode === 'draw' || s.ui.mode === 'preview'
+      if (mod && painting && (k === 'c' || k === 'x' || k === 'v' || k === 'a')) {
+        e.preventDefault()
+        if (k === 'v') pasteClip()
+        else if (k === 'a') selectAll()
+        else copySelection(k === 'x')
+        return
+      }
       if (mod) return
+      if ((e.key === 'Delete' || e.key === 'Backspace') && painting && s.ui.selection) { e.preventDefault(); clearSelection(); return }
       if (k in TOOL_KEYS && s.ui.mode === 'draw') { s.setUi({ tool: TOOL_KEYS[k] }); return }
       if (k === 'x') { s.setUi(ui => ({ primary: ui.secondary, secondary: ui.primary })); return }
       if (k === '[' || k === ']') {

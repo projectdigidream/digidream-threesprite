@@ -5,6 +5,25 @@ anything not released yet is under **Unreleased**.
 
 ## Unreleased
 
+### Added
+
+- **Copy, cut and paste** the selection (the whole image when nothing is
+  selected): Ctrl+C / X / V, or the buttons that take the brush sizes' place
+  while Select or Move is picked. A piece carries across views, parts,
+  variants and projects; pasted into a view with no image, it makes one. A
+  paste floats over the art until something else changes the image, so
+  dragging it never eats what it covered, and Delete takes it away again.
+  Ctrl+A selects the whole image.
+- **A view with no image can start from any other**, not only the nearest:
+  the banner's Copy has a list of every view of the variant that has one,
+  nearest first, and this view in the part's other variants.
+
+### Fixed
+
+- Delete clears the selection on the 3D tab too, not only in Draw.
+- The canvas's passing hints sit at the top, clear of the banner at the
+  bottom; the banner no longer wraps at half the canvas's width.
+
 ## 0.2.4 -- 2026-10-27
 
 First out as the dev release 0.2.3.1.

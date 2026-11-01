@@ -249,11 +249,14 @@ input[type='text'], input:not([type]), input[inputmode] {
   gap: 8px;
   flex-wrap: wrap;
   justify-content: center;
+  width: max-content;
   max-width: calc(100% - 24px);
   font-size: 13px;
   pointer-events: auto;
 }
 .pixel-canvas__banner button { min-height: 30px; padding: 0 10px; font-size: 12px; }
+.pixel-canvas__copy { display: inline-flex; gap: 4px; align-items: center; }
+.pixel-canvas__banner .pixel-canvas__copy-from { width: auto; max-width: 170px; min-height: 30px; padding: 0 6px; font-size: 12px; }
 
 /* ── tool panel ────────────────────────────────────────────────────────────── */
 
@@ -451,8 +454,9 @@ input[type='text'], input:not([type]), input[inputmode] {
 .view-grid__cell .pixel-canvas { height: 180px; flex: none; }
 .pixel-canvas__banner--small { font-size: 11px; padding: 4px 6px; gap: 4px; bottom: 4px; }
 .pixel-canvas__banner--small button { min-height: 24px; padding: 0 6px; font-size: 11px; }
+.pixel-canvas__banner--small .pixel-canvas__copy-from { min-height: 24px; max-width: 110px; font-size: 11px; }
 /* said once, in passing, and never in the way: it fades itself out */
-.pixel-canvas__banner--hint { pointer-events: none; animation: hint-in 120ms ease-out; }
+.pixel-canvas__banner.pixel-canvas__banner--hint { pointer-events: none; animation: hint-in 120ms ease-out; top: 8px; bottom: auto; }
 /* the canvas's own corner: its background, and the bones in Animate */
 .pixel-canvas__corner { position: absolute; top: 6px; right: 6px; display: flex; gap: 4px; align-items: flex-start; z-index: 2; }
 .pixel-canvas__corner > .icon-btn, .pixel-canvas__backgrounds { background: rgba(31, 36, 48, 0.85); border: 1px solid var(--border); }
@@ -466,6 +470,7 @@ input[type='text'], input:not([type]), input[inputmode] {
 @media (max-height: 520px) {
   .pixel-canvas__banner { font-size: 11px; padding: 4px 8px; gap: 6px; bottom: 6px; max-width: calc(100% - 12px); }
   .pixel-canvas__banner button { min-height: 26px; padding: 0 8px; font-size: 11px; }
+  .pixel-canvas__banner .pixel-canvas__copy-from { min-height: 26px; font-size: 11px; }
 }
 
 .studio-mobile { flex: 1; min-height: 0; display: flex; flex-direction: column; }

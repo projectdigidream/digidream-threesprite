@@ -1,4 +1,5 @@
 import { MAX_BRUSH } from '../../core/tools/brush'
+import { copySelection, pasteClip, useClip } from '../../core/tools/clipboard'
 import { clampDensity, clampOffset, densityPercent, DITHER_MAX } from '../../core/tools/dither'
 import { useEditor, type ToolId } from '../../store/editorStore'
 import { Icon } from '../ui/Icon'
@@ -22,7 +23,12 @@ export default function ToolPanel({ horizontal = false }: { horizontal?: boolean
   const mirrorDraw = useEditor(s => s.ui.mirrorDraw)
   const ghostOthers = useEditor(s => s.ui.ghostOthers)
   const grid = useEditor(s => s.ui.grid)
+  const selection = useEditor(s => s.ui.selection)
   const setUi = useEditor(s => s.setUi)
+  const clip = useClip(s => s.clip)
+  // copy and paste come with the selection tools, in the place of the brush sizes they have no use for
+  const clipboard = tool === 'select' || tool === 'move'
+  const what = selection ? 'the selection' : 'the whole image'
 
   return (
     <div className={`tool-panel ${horizontal ? 'tool-panel--h' : ''}`}>
@@ -32,13 +38,13 @@ export default function ToolPanel({ horizontal = false }: { horizontal?: boolean
         </button>
       ))}
       <div className="tool-panel__sep" />
-      <div className="tool-panel__sizes" title="Brush size">
+      {!clipboard && <div className="tool-panel__sizes" title="Brush size">
         {Array.from({ length: MAX_BRUSH }, (_, i) => i + 1).map(n => (
           <button key={n} className={`size-btn ${brushSize === n ? 'is-active' : ''}`} onClick={() => setUi({ brushSize: n })} aria-label={`Brush size ${n}`}>
             <span style={{ width: 3 + n * 2, height: 3 + n * 2 }} />
           </button>
         ))}
-      </div>
+      </div>}
       {tool === 'dither' && (
         <>
           <div className="tool-panel__sep" />
@@ -58,6 +64,13 @@ export default function ToolPanel({ horizontal = false }: { horizontal?: boolean
               onClick={() => setUi({ ditherOffset: clampOffset(ditherOffset + 1) })}
             >→{ditherOffset}</button>
           </div>
+        </>
+      )}
+      {clipboard && (
+        <>
+          <button className="icon-btn" title={`Copy ${what} (Ctrl+C)`} aria-label="Copy" onClick={() => copySelection()}><Icon name="copy" /></button>
+          <button className="icon-btn" title={`Cut ${what} (Ctrl+X)`} aria-label="Cut" onClick={() => copySelection(true)}><Icon name="cut" /></button>
+          <button className="icon-btn" title={clip ? `Paste ${clip.image.width}×${clip.image.height} (Ctrl+V)` : 'Nothing copied yet'} aria-label="Paste" disabled={!clip} onClick={() => pasteClip()}><Icon name="paste" /></button>
         </>
       )}
       <div className="tool-panel__sep" />

@@ -419,6 +419,34 @@ export function getPartImage(p: Project, partId: Id, variantId: Id, view: ViewIn
   return p.parts[partId]?.variants[variantId]?.images[view]
 }
 
+/** Size for a new image of a part: match its existing images, else the canvas. */
+export function newImageSize(p: Project, partId: Id, variantId: Id): { w: number; h: number } {
+  const part = p.parts[partId]
+  const candidates = [part.variants[variantId], ...part.variantOrder.map(id => part.variants[id])]
+  for (const v of candidates) {
+    for (const img of Object.values(v?.images ?? {})) return { w: img.width, h: img.height }
+  }
+  return { w: p.canvas.size, h: p.canvas.size }
+}
+
+/**
+ * The images a view still empty could start from: the variant's own views,
+ * nearest first, then this view in the part's other variants.
+ */
+export function imageSourcesFor(p: Project, partId: Id, variantId: Id, view: ViewIndex): { variantId: Id; view: ViewIndex }[] {
+  const part = p.parts[partId]
+  if (!part) return []
+  const N = p.views.count
+  const near = (k: number) => Math.min(Math.abs(k - view), N - Math.abs(k - view))
+  const own = Object.keys(part.variants[variantId]?.images ?? {}).map(Number)
+    .sort((a, b) => near(a) - near(b) || a - b)
+    .map(k => ({ variantId, view: k }))
+  const others = part.variantOrder
+    .filter(id => id !== variantId && part.variants[id]?.images[view])
+    .map(id => ({ variantId: id, view }))
+  return [...own, ...others]
+}
+
 // ── animations ───────────────────────────────────────────────────────────────
 
 export interface AddAnimationOptions { name?: string; fps?: number; frameCount?: number; loop?: boolean }
